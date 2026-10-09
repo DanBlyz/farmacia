@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Movimiento extends Model
@@ -18,35 +19,54 @@ class Movimiento extends Model
         'usuario_modificador_id',
         'usuario_eliminador_id',
         'producto_id',
+        'lote_id',
         'detalle_id',
         'sucursal_id',
+        'numero_lote',
+        'tipo_movimiento',
         'precio_compra',
         'precio_venta',
         'fecha_caducidad',
         'ingreso',
         'salida',
+        'saldo_stock',
         'fecha',
         'descripcion',
         'estado',
         'deleted_at',
     ];
 
-    public function sucursal()
+    protected $casts = [
+        'fecha_caducidad' => 'date',
+        'fecha' => 'datetime',
+        'ingreso' => 'decimal:2',
+        'salida' => 'decimal:2',
+        'saldo_stock' => 'decimal:2',
+        'precio_compra' => 'decimal:2',
+        'precio_venta' => 'decimal:2',
+    ];
+
+    public function sucursal(): BelongsTo
     {
         return $this->belongsTo(Sucursal::class);
     }
 
-    public function producto()
+    public function producto(): BelongsTo
     {
         return $this->belongsTo(Producto::class);
     }
 
-    public function usuarioCreador()
+    public function lote(): BelongsTo
+    {
+        return $this->belongsTo(Lote::class, 'lote_id');
+    }
+
+    public function usuarioCreador(): BelongsTo
     {
         return $this->belongsTo(User::class, 'usuario_creador_id');
     }
 
-    public function detalle()
+    public function detalle(): BelongsTo
     {
         return $this->belongsTo(Detalle::class);
     }

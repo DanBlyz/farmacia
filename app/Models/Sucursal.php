@@ -28,4 +28,9 @@ class Sucursal extends Model
     {
         return $this->hasMany(Movimiento::class);
     }
+
+    public function lotes()
+    {
+        return $this->hasMany(Lote::class, 'sucursal_id');
+    }
 }
