@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Sincronizacion\Catalogos;
+use App\Models\LeyendaFactura;
 use App\Models\TipoDocumentoSector;
 use App\Models\User;
 use Livewire\Livewire;
@@ -62,4 +63,19 @@ test('can change perPage option dynamically', function () {
         ->assertSet('perPage', 10)
         ->set('perPage', 25)
         ->assertSet('perPage', 25);
+});
+
+test('can switch to new tabs and display items correctly', function () {
+    $user = User::factory()->admin()->create();
+
+    LeyendaFactura::create([
+        'codigo_actividad' => '47731',
+        'descripcion_leyenda' => 'Ley N 453: Los servicios deben prestarse en condiciones de inocuidad',
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(Catalogos::class)
+        ->call('cambiarTab', 'LeyendaFactura')
+        ->assertSet('activeTab', 'LeyendaFactura')
+        ->assertSee('Ley N 453: Los servicios deben prestarse');
 });
