@@ -3,13 +3,13 @@
         Roles
     </x-slot>
 
-    <!-- Tarjeta Única Unificada (Cabecera, Filtro/Buscador y Tabla) -->
-    <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden transition-all duration-200">
+    <!-- Tarjeta Principal (Estilo Clásico: contenido con padding y tabla enmarcada) -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-5 sm:p-6 space-y-5 transition-all duration-200">
         
         <!-- 1. Cabecera y Botón Nuevo -->
-        <div class="p-6 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-2xl bg-teal-600 flex items-center justify-center text-white shadow-md shrink-0">
+                <div class="w-10 h-10 rounded-xl bg-teal-600 flex items-center justify-center text-white shadow-sm shrink-0">
                     <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
                 </div>
                 <div>
@@ -21,7 +21,7 @@
             <div class="flex items-center gap-3 self-start sm:self-auto">
                 @permiso('administracion.roles.crear')
                 <button wire:click="create" 
-                        class="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs sm:text-sm shadow-md transition duration-150 flex items-center gap-2 cursor-pointer">
+                        class="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs sm:text-sm shadow-sm transition duration-150 flex items-center gap-2 cursor-pointer">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" /></svg>
                     <span>Nuevo Rol</span>
                 </button>
@@ -30,79 +30,77 @@
         </div>
 
         <!-- 2. Barra de Filtros y Búsqueda (Rule 9) -->
-        <div class="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <!-- Izquierda: Paginación Dinámica -->
-                <div class="flex items-center gap-2">
-                    <label for="perPage" class="text-xs font-medium text-slate-600 dark:text-slate-400">Mostrar:</label>
-                    <select 
-                        id="perPage" 
-                        wire:model.live="perPage" 
-                        class="text-xs rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-teal-500 py-1.5 px-2.5 shadow-2xs"
-                    >
-                        <option value="10">10</option>
-                        <option value="25">25</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                    </select>
-                    <span class="text-xs text-slate-500 dark:text-slate-400">registros</span>
-                </div>
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1">
+            <!-- Izquierda: Paginación Dinámica -->
+            <div class="flex items-center gap-2">
+                <label for="perPage" class="text-xs font-medium text-slate-600 dark:text-slate-400">Mostrar:</label>
+                <select 
+                    id="perPage" 
+                    wire:model.live="perPage" 
+                    class="text-xs rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-teal-500 py-1.5 px-2.5 shadow-2xs"
+                >
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+                <span class="text-xs text-slate-500 dark:text-slate-400">registros</span>
+            </div>
 
-                <!-- Derecha: Buscador Debounce -->
-                <div class="relative w-full md:w-80">
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                        <i class="fas fa-search text-xs"></i>
-                    </div>
-                    <input 
-                        type="text" 
-                        wire:model.live.debounce.300ms="search" 
-                        placeholder="Buscar rol por nombre..." 
-                        class="w-full pl-9 pr-8 py-2 text-xs rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-teal-500 shadow-2xs"
-                    />
-                    @if ($search !== '')
-                        <button wire:click="$set('search', '')" type="button" class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
-                            <i class="fas fa-times-circle text-xs"></i>
-                        </button>
-                    @endif
+            <!-- Derecha: Buscador Debounce -->
+            <div class="relative w-full md:w-80">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <i class="fas fa-search text-xs"></i>
                 </div>
+                <input 
+                    type="text" 
+                    wire:model.live.debounce.300ms="search" 
+                    placeholder="Buscar rol por nombre..." 
+                    class="w-full pl-9 pr-8 py-2 text-xs rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-teal-500 shadow-2xs"
+                />
+                @if ($search !== '')
+                    <button wire:click="$set('search', '')" type="button" class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
+                        <i class="fas fa-times-circle text-xs"></i>
+                    </button>
+                @endif
             </div>
         </div>
 
-        <!-- 3. Tabla de Registros -->
-        <div class="overflow-x-auto">
+        <!-- 3. Tabla de Registros Clásica (Enmarcada con bordes propios, sin abarcar todo el card) -->
+        <div class="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
             <table class="w-full text-left border-collapse">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold tracking-wider text-slate-500 dark:text-slate-400 uppercase">
-                        <th class="py-3.5 px-6 w-20">ID</th>
-                        <th class="py-3.5 px-6">Nombre del Rol</th>
-                        <th class="py-3.5 px-6">Registro</th>
-                        <th class="py-3.5 px-6 text-right w-36">Acciones</th>
+                        <th class="py-3 px-4 w-20">ID</th>
+                        <th class="py-3 px-4">Nombre del Rol</th>
+                        <th class="py-3 px-4 w-44">Registro</th>
+                        <th class="py-3 px-4 text-right w-28">Acciones</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs sm:text-sm">
                     @forelse ($roles as $rol)
                         <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group">
-                            <td class="py-4 px-6 font-mono font-semibold text-slate-500 dark:text-slate-400">
+                            <td class="py-3 px-4 font-mono font-semibold text-slate-500 dark:text-slate-400">
                                 #{{ $rol->id }}
                             </td>
-                            <td class="py-4 px-6">
+                            <td class="py-3 px-4">
                                 <div class="flex items-center gap-3">
                                     <span class="font-bold text-slate-800 dark:text-slate-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
                                         {{ $rol->nombre }}
                                     </span>
                                 </div>
                             </td>
-                            <td class="py-4 px-6 text-slate-500 dark:text-slate-400">
+                            <td class="py-3 px-4 text-slate-500 dark:text-slate-400">
                                 <div class="flex flex-col">
                                     <span class="font-medium text-slate-700 dark:text-slate-300">{{ $rol->created_at ? $rol->created_at->format('d/m/Y') : 'N/D' }}</span>
                                     <span class="text-[11px] text-slate-400">{{ $rol->created_at ? $rol->created_at->format('H:i') : '' }}</span>
                                 </div>
                             </td>
-                            <td class="py-4 px-6 text-right">
+                            <td class="py-3 px-4 text-right">
                                 <div class="flex items-center justify-end gap-2">
                                     @permiso('administracion.roles.editar')
                                     <button wire:click="edit({{ $rol->id }})" 
-                                            class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-950 hover:text-teal-600 dark:hover:text-teal-400 transition-colors focus:outline-none cursor-pointer"
+                                            class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-950 hover:text-teal-600 dark:hover:text-teal-400 transition-colors focus:outline-none cursor-pointer"
                                             title="Editar Rol">
                                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                     </button>
@@ -121,7 +119,7 @@
                                                 method: 'delete',
                                                 params: [{{ $rol->id }}]
                                             })" 
-                                            class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950 hover:text-rose-600 dark:hover:text-rose-400 transition-colors focus:outline-none cursor-pointer"
+                                            class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950 hover:text-rose-600 dark:hover:text-rose-400 transition-colors focus:outline-none cursor-pointer"
                                             title="Eliminar Rol">
                                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                     </button>
@@ -151,9 +149,9 @@
             </table>
         </div>
 
-        <!-- 4. Paginación inferior -->
+        <!-- 4. Paginación Clásica -->
         @if($roles->hasPages())
-            <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
+            <div class="pt-2">
                 {{ $roles->links() }}
             </div>
         @endif

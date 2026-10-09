@@ -27,13 +27,13 @@
         </div>
     @endif
 
-    <!-- Tarjeta Única Unificada (Cabecera, Filtro/Buscador y Tabla) -->
-    <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden transition-all duration-200">
+    <!-- Tarjeta Principal (Estilo Clásico: contenido con padding y tabla enmarcada) -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-5 sm:p-6 space-y-5 transition-all duration-200">
         
         <!-- 1. Cabecera y Botón Nuevo -->
-        <div class="p-6 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-2xl bg-teal-600 flex items-center justify-center text-white shadow-md shrink-0">
+                <div class="w-10 h-10 rounded-xl bg-teal-600 flex items-center justify-center text-white shadow-sm shrink-0">
                     <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
                 </div>
                 <div>
@@ -45,7 +45,7 @@
             <div class="flex items-center gap-3 self-start sm:self-auto">
                 @permiso('administracion.clientes.crear')
                 <button wire:click="create" 
-                        class="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs sm:text-sm shadow-md transition duration-150 flex items-center gap-2 cursor-pointer">
+                        class="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs sm:text-sm shadow-sm transition duration-150 flex items-center gap-2 cursor-pointer">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" /></svg>
                     <span>Nuevo Cliente</span>
                 </button>
@@ -53,62 +53,60 @@
             </div>
         </div>
 
-        <!-- 2. Barra de Filtros y Búsqueda en la misma fila -->
-        <div class="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <!-- Izquierda: Paginación Dinámica -->
-                <div class="flex items-center gap-2">
-                    <label for="perPage" class="text-xs font-medium text-slate-600 dark:text-slate-400">Mostrar:</label>
-                    <select 
-                        id="perPage" 
-                        wire:model.live="perPage" 
-                        class="text-xs rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-teal-500 py-1.5 px-2.5 shadow-2xs"
-                    >
-                        <option value="10">10</option>
-                        <option value="25">25</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                    </select>
-                    <span class="text-xs text-slate-500 dark:text-slate-400">registros</span>
-                </div>
+        <!-- 2. Barra de Filtros y Búsqueda -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1">
+            <!-- Izquierda: Paginación Dinámica -->
+            <div class="flex items-center gap-2">
+                <label for="perPage" class="text-xs font-medium text-slate-600 dark:text-slate-400">Mostrar:</label>
+                <select 
+                    id="perPage" 
+                    wire:model.live="perPage" 
+                    class="text-xs rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-teal-500 py-1.5 px-2.5 shadow-2xs"
+                >
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+                <span class="text-xs text-slate-500 dark:text-slate-400">registros</span>
+            </div>
 
-                <!-- Derecha: Buscador Debounce -->
-                <div class="relative w-full md:w-80">
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                        <i class="fas fa-search text-xs"></i>
-                    </div>
-                    <input 
-                        type="text" 
-                        wire:model.live.debounce.300ms="search" 
-                        placeholder="Buscar por nombre, CI, NIT o celular..." 
-                        class="w-full pl-9 pr-8 py-2 text-xs rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-teal-500 shadow-2xs"
-                    />
-                    @if ($search !== '')
-                        <button wire:click="$set('search', '')" type="button" class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
-                            <i class="fas fa-times-circle text-xs"></i>
-                        </button>
-                    @endif
+            <!-- Derecha: Buscador Debounce -->
+            <div class="relative w-full md:w-80">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <i class="fas fa-search text-xs"></i>
                 </div>
+                <input 
+                    type="text" 
+                    wire:model.live.debounce.300ms="search" 
+                    placeholder="Buscar por nombre, CI, NIT o celular..." 
+                    class="w-full pl-9 pr-8 py-2 text-xs rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-teal-500 shadow-2xs"
+                />
+                @if ($search !== '')
+                    <button wire:click="$set('search', '')" type="button" class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
+                        <i class="fas fa-times-circle text-xs"></i>
+                    </button>
+                @endif
             </div>
         </div>
 
-        <!-- 3. Tabla de Registros -->
-        <div class="overflow-x-auto">
+        <!-- 3. Tabla de Registros Clásica (Enmarcada con bordes propios, sin abarcar todo el card) -->
+        <div class="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
             <table class="w-full text-left border-collapse">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold tracking-wider text-slate-500 dark:text-slate-400 uppercase">
-                        <th class="py-3.5 px-6">Cliente</th>
-                        <th class="py-3.5 px-6 w-36">CI</th>
-                        <th class="py-3.5 px-6 w-36">NIT</th>
-                        <th class="py-3.5 px-6 w-40">Celular</th>
-                        <th class="py-3.5 px-6">Correo Electrónico</th>
-                        <th class="py-3.5 px-6 text-right w-36">Acciones</th>
+                        <th class="py-3 px-4">Cliente</th>
+                        <th class="py-3 px-4 w-32">CI</th>
+                        <th class="py-3 px-4 w-32">NIT</th>
+                        <th class="py-3 px-4 w-36">Celular</th>
+                        <th class="py-3 px-4">Correo Electrónico</th>
+                        <th class="py-3 px-4 text-right w-28">Acciones</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs sm:text-sm">
                     @forelse ($clientes as $cliente)
                         <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group">
-                            <td class="py-4 px-6">
+                            <td class="py-3 px-4">
                                 <div class="flex flex-col">
                                     <span class="font-bold text-slate-800 dark:text-slate-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
                                         {{ trim($cliente->nombres . ' ' . $cliente->ap_paterno . ' ' . $cliente->ap_materno) }}
@@ -118,33 +116,33 @@
                                     </span>
                                 </div>
                             </td>
-                            <td class="py-4 px-6">
-                                <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 font-mono font-bold text-xs text-purple-600 dark:text-purple-400 border border-slate-200 dark:border-slate-700">
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 font-mono font-bold text-xs text-purple-600 dark:text-purple-400 border border-slate-200 dark:border-slate-700">
                                     {{ $cliente->cedula . ($cliente->complemento ? '-' . $cliente->complemento : '') }}
                                 </span>
                             </td>
-                            <td class="py-4 px-6">
-                                <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 font-mono font-bold text-xs text-purple-600 dark:text-purple-400 border border-slate-200 dark:border-slate-700">
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 font-mono font-bold text-xs text-purple-600 dark:text-purple-400 border border-slate-200 dark:border-slate-700">
                                     {{ $cliente->nit ?: 'S/D' }}
                                 </span>
                             </td>
-                            <td class="py-4 px-6 text-slate-600 dark:text-slate-300 font-medium">
+                            <td class="py-3 px-4 text-slate-600 dark:text-slate-300 font-medium">
                                 <div class="flex items-center gap-2">
                                     <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
                                     <span>{{ $cliente->numero_celular ?: 'No registrado' }}</span>
                                 </div>
                             </td>
-                            <td class="py-4 px-6 text-slate-600 dark:text-slate-300">
+                            <td class="py-3 px-4 text-slate-600 dark:text-slate-300">
                                 <div class="flex items-center gap-2 max-w-xs truncate">
                                     <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                                     <span class="truncate">{{ $cliente->correo ?: 'Sin correo' }}</span>
                                 </div>
                             </td>
-                            <td class="py-4 px-6 text-right">
+                            <td class="py-3 px-4 text-right">
                                 <div class="flex items-center justify-end gap-2">
                                     @permiso('administracion.clientes.editar')
                                     <button wire:click="edit({{ $cliente->id }})" 
-                                            class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-950 hover:text-teal-600 dark:hover:text-teal-400 transition-colors focus:outline-none cursor-pointer"
+                                            class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-950 hover:text-teal-600 dark:hover:text-teal-400 transition-colors focus:outline-none cursor-pointer"
                                             title="Editar Cliente">
                                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                     </button>
@@ -163,7 +161,7 @@
                                                 method: 'delete',
                                                 params: [{{ $cliente->id }}]
                                             })" 
-                                            class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950 hover:text-rose-600 dark:hover:text-rose-400 transition-colors focus:outline-none cursor-pointer"
+                                            class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950 hover:text-rose-600 dark:hover:text-rose-400 transition-colors focus:outline-none cursor-pointer"
                                             title="Eliminar Cliente">
                                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                     </button>
@@ -173,7 +171,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="py-12 px-6 text-center">
+                            <td colspan="6" class="py-12 px-6 text-center">
                                 <div class="max-w-xs mx-auto flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
                                     <div class="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
                                         <svg class="w-7 h-7 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
@@ -181,7 +179,7 @@
                                     <p class="text-sm font-semibold text-slate-600 dark:text-slate-300">No se encontraron clientes</p>
                                     <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">No hay coincidencias con tu búsqueda actual o aún no se han registrado clientes.</p>
                                     @if($search !== '')
-                                        <button wire:click="$set('search', '')" class="mt-4 px-4 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-medium transition-colors">
+                                        <button wire:click="$set('search', '')" class="mt-4 px-4 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-medium transition-colors cursor-pointer">
                                             Limpiar filtro de búsqueda
                                         </button>
                                     @endif
@@ -193,9 +191,9 @@
             </table>
         </div>
 
-        <!-- 4. Paginación inferior -->
+        <!-- 4. Paginación Clásica -->
         @if($clientes->hasPages())
-            <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
+            <div class="pt-2">
                 {{ $clientes->links() }}
             </div>
         @endif

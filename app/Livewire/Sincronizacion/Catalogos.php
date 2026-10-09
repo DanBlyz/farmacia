@@ -20,10 +20,62 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 #[Layout('layouts.app')]
 class Catalogos extends Component
 {
+    use WithPagination;
+
+    public string $activeTab = 'TipoDocumentoSector';
+
+    public int $perPage = 10;
+
+    public string $search = '';
+
+    public array $tabs = [
+        'TipoDocumentoSector' => [
+            'nombre' => 'Documentos Sector',
+            'model' => TipoDocumentoSector::class,
+            'col_codigo' => 'codigo_clasificador',
+        ],
+        'TipoPuntoVenta' => [
+            'nombre' => 'Puntos de Venta',
+            'model' => TipoPuntoVenta::class,
+            'col_codigo' => 'codigo_clasificador',
+        ],
+        'UnidadMedida' => [
+            'nombre' => 'Unidades de Medida',
+            'model' => UnidadMedida::class,
+            'col_codigo' => 'codigo_clasificador',
+        ],
+        'TipoDocumentoIdentidad' => [
+            'nombre' => 'Documentos de Identidad',
+            'model' => TipoDocumentoIdentidad::class,
+            'col_codigo' => 'codigo_clasificador',
+        ],
+        'TipoMetodoPago' => [
+            'nombre' => 'Métodos de Pago',
+            'model' => TipoMetodoPago::class,
+            'col_codigo' => 'tipo_clasificador',
+        ],
+        'TipoMoneda' => [
+            'nombre' => 'Tipos de Moneda',
+            'model' => TipoMoneda::class,
+            'col_codigo' => 'tipo_clasificador',
+        ],
+        'MotivoAnulacion' => [
+            'nombre' => 'Motivos de Anulación',
+            'model' => MotivoAnulacion::class,
+            'col_codigo' => 'codigo_clasificador',
+        ],
+        'TipoEventoSignificativo' => [
+            'nombre' => 'Eventos Significativos',
+            'model' => TipoEventoSignificativo::class,
+            'col_codigo' => 'codigo_clasificador',
+        ],
+    ];
+
     protected $codigo_ambiente;
 
     protected $codigo_modalidad;
@@ -33,6 +85,25 @@ class Catalogos extends Component
     protected $codigo_sistema;
 
     protected $nit;
+
+    public function updatingSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingPerPage(): void
+    {
+        $this->resetPage();
+    }
+
+    public function cambiarTab(string $tab): void
+    {
+        if (array_key_exists($tab, $this->tabs)) {
+            $this->activeTab = $tab;
+            $this->resetPage();
+            $this->search = '';
+        }
+    }
 
     public function boot(): void
     {
@@ -296,15 +367,23 @@ class Catalogos extends Component
     {
         abort_if(! Auth::user()?->tienePermiso('sincronizacion.catalogos.ver'), 403, 'No tienes permiso para ver los catálogos.');
 
+        $activeInfo = $this->tabs[$this->activeTab] ?? $this->tabs['TipoDocumentoSector'];
+        $modelClass = $activeInfo['model'];
+        $colCodigo = $activeInfo['col_codigo'];
+
+        $items = $modelClass::query()
+            ->when($this->search !== '', function ($query) use ($colCodigo) {
+                $query->where(function ($q) use ($colCodigo) {
+                    $q->where($colCodigo, 'like', '%'.trim($this->search).'%')
+                        ->orWhere('descripcion', 'like', '%'.trim($this->search).'%');
+                });
+            })
+            ->orderBy($colCodigo, 'asc')
+            ->paginate($this->perPage);
+
         return view('livewire.sincronizacion.catalogos', [
-            'tipoDocumentoSector' => TipoDocumentoSector::all(),
-            'tipoPuntoVenta' => TipoPuntoVenta::all(),
-            'unidadMedida' => UnidadMedida::all(),
-            'tipoDocumentoIdentidad' => TipoDocumentoIdentidad::all(),
-            'tipoMetodoPago' => TipoMetodoPago::all(),
-            'tipoMoneda' => TipoMoneda::all(),
-            'motivoAnulacion' => MotivoAnulacion::all(),
-            'tipoEventoSignificativo' => TipoEventoSignificativo::all(),
+            'items' => $items,
+            'activeInfo' => $activeInfo,
         ]);
     }
 }
