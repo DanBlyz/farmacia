@@ -1,12 +1,21 @@
 <?php
 
 use App\Livewire\Administracion\Sucursales;
+use App\Models\PuntoVenta;
 use App\Models\Sucursal;
 use App\Models\User;
 use Livewire\Livewire;
 
-test('authenticated users can visit the sucursales index page', function () {
+test('unauthorized users cannot visit the sucursales index page', function () {
     $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('administracion.sucursales'))
+        ->assertStatus(403);
+});
+
+test('authenticated users with permission can visit the sucursales index page', function () {
+    $user = User::factory()->admin()->create();
 
     $this->actingAs($user)
         ->get(route('administracion.sucursales'))
@@ -15,7 +24,7 @@ test('authenticated users can visit the sucursales index page', function () {
 });
 
 test('can create a new sucursal and close modal', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->admin()->create();
 
     Livewire::actingAs($user)
         ->test(Sucursales::class)
@@ -36,8 +45,28 @@ test('can create a new sucursal and close modal', function () {
     ]);
 });
 
-test('can search sucursales by name or code', function () {
+test('unauthorized users cannot create, edit or delete sucursales', function () {
     $user = User::factory()->create();
+    $sucursal = Sucursal::create(['codigo_sucursal' => 'SUC-PROT', 'nombre' => 'Sucursal Protegida']);
+
+    Livewire::actingAs($user)
+        ->test(Sucursales::class)
+        ->call('create')
+        ->assertStatus(403);
+
+    Livewire::actingAs($user)
+        ->test(Sucursales::class)
+        ->call('edit', $sucursal->id)
+        ->assertStatus(403);
+
+    Livewire::actingAs($user)
+        ->test(Sucursales::class)
+        ->call('delete', $sucursal->id)
+        ->assertStatus(403);
+});
+
+test('can search sucursales by name or code', function () {
+    $user = User::factory()->admin()->create();
 
     Sucursal::create(['codigo_sucursal' => 'SUC-001', 'nombre' => 'Sucursal Miraflores']);
     Sucursal::create(['codigo_sucursal' => 'SUC-002', 'nombre' => 'Sucursal Calacoto']);
@@ -50,7 +79,7 @@ test('can search sucursales by name or code', function () {
 });
 
 test('can edit an existing sucursal', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->admin()->create();
     $sucursal = Sucursal::create([
         'codigo_sucursal' => 'SUC-OLD',
         'nombre' => 'Sucursal Antigua',
@@ -76,7 +105,7 @@ test('can edit an existing sucursal', function () {
 });
 
 test('can soft delete a sucursal', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->admin()->create();
     $sucursal = Sucursal::create([
         'codigo_sucursal' => 'SUC-DEL',
         'nombre' => 'Sucursal Por Eliminar',
@@ -93,12 +122,12 @@ test('can soft delete a sucursal', function () {
 });
 
 test('can open and close puntos de venta siat modal', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->admin()->create();
     $sucursal = Sucursal::create([
         'codigo_sucursal' => '0',
         'nombre' => 'Sucursal Para Facturacion',
     ]);
-    \App\Models\PuntoVenta::create([
+    PuntoVenta::create([
         'sucursal_id' => $sucursal->id,
         'codigo' => 0,
         'nombre' => 'Punto de Venta 0',
@@ -119,7 +148,7 @@ test('can open and close puntos de venta siat modal', function () {
 });
 
 test('sincronizar puntos de venta shows error when no valid cuis exists', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->admin()->create();
     $sucursal = Sucursal::create([
         'codigo_sucursal' => '10',
         'nombre' => 'Sucursal Sin Cuis para Sincronizar PV',
@@ -134,7 +163,7 @@ test('sincronizar puntos de venta shows error when no valid cuis exists', functi
 });
 
 test('cierre operaciones sistema shows error when no valid cuis exists', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->admin()->create();
     $sucursal = Sucursal::create([
         'codigo_sucursal' => '11',
         'nombre' => 'Sucursal Sin Cuis para Cierre Operaciones',
@@ -149,7 +178,7 @@ test('cierre operaciones sistema shows error when no valid cuis exists', functio
 });
 
 test('can open and validate registro punto venta modal and return to puntos de venta modal on close', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->admin()->create();
     $sucursal = Sucursal::create([
         'codigo_sucursal' => '12',
         'nombre' => 'Sucursal Para Registro PV',

@@ -29,20 +29,18 @@
     <body class="font-sans antialiased bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen selection:bg-teal-500 selection:text-white">
         <div class="min-h-screen flex flex-col lg:flex-row">
             <!-- Panel Izquierdo: Branding & Contexto Farmacéutico -->
-            <div class="hidden lg:flex lg:w-7/12 bg-gradient-to-br from-teal-900 via-emerald-950 to-slate-950 text-white p-12 flex-col justify-between relative overflow-hidden">
+            <div class="hidden lg:flex lg:w-7/12 bg-slate-900 text-white p-12 flex-col justify-between relative overflow-hidden border-r border-slate-800">
                 <!-- Luces decorativas de fondo -->
-                <div class="absolute -top-24 -left-24 w-96 h-96 bg-teal-500/15 rounded-full blur-3xl pointer-events-none"></div>
-                <div class="absolute bottom-12 right-12 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div class="absolute -top-24 -left-24 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div class="absolute bottom-12 right-12 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl pointer-events-none"></div>
                 
                 <!-- Patrón sutil médico / farmacia -->
                 <div class="absolute inset-0 opacity-[0.03] pointer-events-none" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 32px 32px;"></div>
 
                 <!-- Cabecera Logo -->
                 <div class="relative z-10 flex items-center gap-3">
-                    <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-teal-500 to-emerald-400 flex items-center justify-center shadow-lg shadow-teal-500/30 font-bold text-2xl tracking-wider text-white">
-                        <svg class="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-                        </svg>
+                    <div class="w-12 h-12 rounded-xl bg-teal-600 flex items-center justify-center shadow-2xs font-bold text-2xl tracking-wider text-white">
+                        <i class="fas fa-prescription-bottle-alt text-xl text-white"></i>
                     </div>
                     <div>
                         <span class="text-2xl font-bold tracking-tight text-white block leading-tight">FARMA</span>
@@ -101,10 +99,8 @@
                 <div class="w-full max-w-md bg-white dark:bg-slate-900 p-8 sm:p-10 rounded-3xl shadow-2xl shadow-slate-200/60 dark:shadow-none border border-slate-100 dark:border-slate-800 relative z-10">
                     <!-- Logo visible únicamente en móvil -->
                     <div class="flex lg:hidden items-center justify-center gap-2 mb-8">
-                        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-400 flex items-center justify-center shadow-md shadow-teal-500/20 text-white">
-                            <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-                            </svg>
+                        <div class="w-10 h-10 rounded-lg bg-teal-600 flex items-center justify-center shadow-2xs text-white">
+                            <i class="fas fa-prescription-bottle-alt text-base text-white"></i>
                         </div>
                         <span class="text-xl font-bold tracking-tight text-slate-900 dark:text-white">FARMA</span>
                     </div>

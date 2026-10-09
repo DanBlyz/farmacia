@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class PuntoVenta extends Model
 {
-    use HasFactory, SoftDeletes;
+    use Auditable, HasFactory, SoftDeletes;
+
     protected $table = 'punto_ventas';
 
     protected $fillable = [
@@ -21,10 +23,11 @@ class PuntoVenta extends Model
         'tipo',
         'codigo_ambiente',
         'estado',
-        'deleted_at'
+        'deleted_at',
     ];
 
-    public function sucursal(){
+    public function sucursal()
+    {
         return $this->belongsTo(Sucursal::class, 'sucursal_id');
     }
 }

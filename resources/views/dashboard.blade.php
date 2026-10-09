@@ -5,8 +5,7 @@
 
     <div class="space-y-6">
         <!-- Banner de Bienvenida -->
-        <div class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-teal-900 via-emerald-900 to-slate-900 text-white p-6 sm:p-8 shadow-xl">
-            <div class="absolute -top-24 -right-24 w-80 h-80 bg-teal-500/15 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="relative overflow-hidden rounded-2xl bg-slate-900 dark:bg-slate-950 text-white p-6 sm:p-8 shadow-sm border border-slate-800">
             <div class="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
                     <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 border border-teal-500/30 text-teal-300 text-xs font-semibold uppercase tracking-wider mb-2">
@@ -21,8 +20,8 @@
                     </p>
                 </div>
                 <div class="flex items-center gap-3 shrink-0">
-                    <a href="#" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-teal-500/30 transition-transform duration-200 transform hover:-translate-y-0.5">
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" /></svg>
+                    <a href="#" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs uppercase tracking-wider shadow-2xs transition-colors">
+                        <i class="fas fa-cash-register text-xs"></i>
                         <span>Abrir POS</span>
                     </a>
                 </div>

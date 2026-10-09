@@ -38,8 +38,8 @@
     <!-- Lado Derecho: Acciones, Modo Oscuro y Perfil -->
     <div class="flex items-center gap-2 sm:gap-3">
         <!-- Botón de Venta Rápida (POS) -->
-        <a href="#" class="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs shadow-md shadow-emerald-500/20 transition duration-150 transform hover:-translate-y-0.5 active:translate-y-0">
-            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" /></svg>
+        <a href="#" class="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-2xs transition duration-150">
+            <i class="fas fa-cash-register text-xs"></i>
             <span>Nueva Venta POS</span>
         </a>
 
@@ -106,7 +106,7 @@
         <div class="relative" x-data="{ openUser: false }">
             <button @click="openUser = !openUser" @click.outside="openUser = false" 
                     class="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none">
-                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-600 to-emerald-700 flex items-center justify-center text-white font-bold text-xs shadow-sm">
+                <div class="w-8 h-8 rounded-lg bg-teal-600 flex items-center justify-center text-white font-bold text-xs shadow-2xs">
                     {{ strtoupper(substr(Auth::user()->name ?? 'U', 0, 2)) }}
                 </div>
                 <div class="hidden lg:block text-left">

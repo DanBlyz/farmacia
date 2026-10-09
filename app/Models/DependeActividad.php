@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class DependeActividad extends Model
 {
-    use SoftDeletes, HasFactory;
+    use Auditable, HasFactory, SoftDeletes;
 
     protected $table = 'depende_actividades';
 
@@ -22,7 +23,6 @@ class DependeActividad extends Model
         'descripcion',
         'tipo_actividad',
         'estado',
-        'deleted_at'
+        'deleted_at',
     ];
-
 }

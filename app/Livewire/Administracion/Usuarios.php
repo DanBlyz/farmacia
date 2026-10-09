@@ -6,6 +6,7 @@ use App\Models\PuntoVenta;
 use App\Models\Rol;
 use App\Models\Sucursal;
 use App\Models\User;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Attributes\Layout;
@@ -25,21 +26,34 @@ class Usuarios extends Component
 
     // Estado del Formulario / Modal
     public bool $showModal = false;
+
     public ?int $usuarioId = null;
+
     public string $email = '';
+
     public string $nombres = '';
+
     public string $ap_paterno = '';
+
     public string $ap_materno = '';
+
     public ?int $rol_id = null;
+
     public ?int $sucursal_id = null;
+
     public string $cedula = '';
+
     public string $direccion = '';
+
     public string $celular = '';
 
     // Estado del Modal de Reseteo de Contraseña
     public bool $showPasswordModal = false;
+
     public ?int $resetUsuarioId = null;
+
     public string $newPassword = '';
+
     public string $resetUsuarioNombre = '';
 
     public function updatedSearch(): void
@@ -54,12 +68,14 @@ class Usuarios extends Component
 
     public function create(): void
     {
+        abort_if(! Auth::user()->tienePermiso('administracion.usuarios.crear'), 403, 'No tiene permiso para crear usuarios.');
         $this->resetForm();
         $this->showModal = true;
     }
 
     public function edit(int $id): void
     {
+        abort_if(! Auth::user()->tienePermiso('administracion.usuarios.editar'), 403, 'No tiene permiso para editar usuarios.');
         $this->resetForm();
         $usuario = User::with('puntoVenta')->findOrFail($id);
         $this->usuarioId = $usuario->id;
@@ -77,8 +93,14 @@ class Usuarios extends Component
 
     public function save(): void
     {
+        if ($this->usuarioId) {
+            abort_if(! Auth::user()->tienePermiso('administracion.usuarios.editar'), 403, 'No tiene permiso para editar usuarios.');
+        } else {
+            abort_if(! Auth::user()->tienePermiso('administracion.usuarios.crear'), 403, 'No tiene permiso para crear usuarios.');
+        }
+
         $this->validate([
-            'email' => 'required|email|max:255|unique:users,email,' . ($this->usuarioId ?? 'NULL') . ',id,deleted_at,NULL',
+            'email' => 'required|email|max:255|unique:users,email,'.($this->usuarioId ?? 'NULL').',id,deleted_at,NULL',
             'nombres' => 'required|string|max:150',
             'ap_paterno' => 'nullable|string|max:100',
             'ap_materno' => 'nullable|string|max:100',
@@ -111,13 +133,13 @@ class Usuarios extends Component
                 'usuario_creador_id' => Auth::id(),
                 'sucursal_id' => $sucursal->id,
                 'codigo' => 0,
-                'nombre' => 'PRIMER PUNTO VENTA POR DEFECTO (' . $sucursal->nombre . ')',
+                'nombre' => 'PRIMER PUNTO VENTA POR DEFECTO ('.$sucursal->nombre.')',
                 'tipo' => 'VENTANILLA INICIAL POR DEFECTO',
                 'codigo_ambiente' => 2,
             ]);
         }
 
-        $nombreCompleto = trim($this->nombres . ' ' . $this->ap_paterno . ' ' . $this->ap_materno);
+        $nombreCompleto = trim($this->nombres.' '.$this->ap_paterno.' '.$this->ap_materno);
 
         if ($this->usuarioId) {
             $usuario = User::findOrFail($this->usuarioId);
@@ -134,7 +156,12 @@ class Usuarios extends Component
                 'celular' => trim($this->celular),
                 'usuario_modificador_id' => Auth::id(),
             ]);
-            session()->flash('message', 'Usuario actualizado exitosamente.');
+
+            $this->dispatch('swal', [
+                'icon' => 'success',
+                'title' => '¡Operación Exitosa!',
+                'text' => 'Usuario actualizado exitosamente.',
+            ]);
         } else {
             User::create([
                 'name' => $nombreCompleto ?: $this->nombres,
@@ -150,7 +177,12 @@ class Usuarios extends Component
                 'celular' => trim($this->celular),
                 'usuario_creador_id' => Auth::id(),
             ]);
-            session()->flash('message', 'Usuario registrado exitosamente (Contraseña asignada según Cédula).');
+
+            $this->dispatch('swal', [
+                'icon' => 'success',
+                'title' => '¡Operación Exitosa!',
+                'text' => 'Usuario registrado exitosamente (Contraseña asignada según Cédula).',
+            ]);
         }
 
         $this->closeModal();
@@ -158,8 +190,14 @@ class Usuarios extends Component
 
     public function delete(int $id): void
     {
+        abort_if(! Auth::user()->tienePermiso('administracion.usuarios.eliminar'), 403, 'No tiene permiso para eliminar usuarios.');
+
         if ($id === Auth::id()) {
-            session()->flash('error', 'No puedes eliminar tu propia cuenta de usuario mientras estás en sesión.');
+            $this->dispatch('swal', [
+                'icon' => 'error',
+                'title' => 'Acción Denegada',
+                'text' => 'No puedes eliminar tu propia cuenta de usuario mientras estás en sesión.',
+            ]);
 
             return;
         }
@@ -170,8 +208,11 @@ class Usuarios extends Component
         ]);
         $usuario->delete();
 
-        session()->flash('message', 'Usuario eliminado del sistema.');
-        $this->dispatch('usuario-deleted', message: 'Usuario eliminado del catálogo exitosamente.');
+        $this->dispatch('swal', [
+            'icon' => 'success',
+            'title' => '¡Eliminado!',
+            'text' => 'Usuario eliminado del catálogo exitosamente.',
+        ]);
     }
 
     public function closeModal(): void
@@ -191,9 +232,10 @@ class Usuarios extends Component
 
     public function openPasswordModal(int $id): void
     {
+        abort_if(! Auth::user()->tienePermiso('administracion.usuarios.editar'), 403, 'No tiene permiso para modificar contraseñas.');
         $usuario = User::findOrFail($id);
         $this->resetUsuarioId = $usuario->id;
-        $this->resetUsuarioNombre = trim($usuario->nombres . ' ' . $usuario->ap_paterno . ' ' . $usuario->ap_materno) ?: $usuario->name;
+        $this->resetUsuarioNombre = trim($usuario->nombres.' '.$usuario->ap_paterno.' '.$usuario->ap_materno) ?: $usuario->name;
         $this->newPassword = '';
         $this->resetErrorBag();
         $this->showPasswordModal = true;
@@ -201,6 +243,8 @@ class Usuarios extends Component
 
     public function saveNewPassword(): void
     {
+        abort_if(! Auth::user()->tienePermiso('administracion.usuarios.editar'), 403, 'No tiene permiso para modificar contraseñas.');
+
         $this->validate([
             'newPassword' => 'required|string|min:4|max:100',
         ], [
@@ -215,7 +259,12 @@ class Usuarios extends Component
             'usuario_modificador_id' => Auth::id(),
         ]);
 
-        session()->flash('message', 'Contraseña restablecida exitosamente para el usuario ' . $this->resetUsuarioNombre . '.');
+        $this->dispatch('swal', [
+            'icon' => 'success',
+            'title' => '¡Contraseña Actualizada!',
+            'text' => 'Contraseña restablecida exitosamente para el usuario '.$this->resetUsuarioNombre.'.',
+        ]);
+
         $this->closePasswordModal();
     }
 
@@ -226,19 +275,19 @@ class Usuarios extends Component
         $this->resetErrorBag();
     }
 
-    public function render()
+    public function render(): View
     {
         $usuarios = User::query()
             ->with(['rol', 'puntoVenta.sucursal'])
             ->when($this->search !== '', function ($query) {
                 $query->where(function ($q) {
-                    $q->where('name', 'like', '%' . trim($this->search) . '%')
-                        ->orWhere('nombres', 'like', '%' . trim($this->search) . '%')
-                        ->orWhere('ap_paterno', 'like', '%' . trim($this->search) . '%')
-                        ->orWhere('ap_materno', 'like', '%' . trim($this->search) . '%')
-                        ->orWhere('email', 'like', '%' . trim($this->search) . '%')
-                        ->orWhere('cedula', 'like', '%' . trim($this->search) . '%')
-                        ->orWhere('celular', 'like', '%' . trim($this->search) . '%');
+                    $q->where('name', 'like', '%'.trim($this->search).'%')
+                        ->orWhere('nombres', 'like', '%'.trim($this->search).'%')
+                        ->orWhere('ap_paterno', 'like', '%'.trim($this->search).'%')
+                        ->orWhere('ap_materno', 'like', '%'.trim($this->search).'%')
+                        ->orWhere('email', 'like', '%'.trim($this->search).'%')
+                        ->orWhere('cedula', 'like', '%'.trim($this->search).'%')
+                        ->orWhere('celular', 'like', '%'.trim($this->search).'%');
                 });
             })
             ->orderBy('id', 'desc')

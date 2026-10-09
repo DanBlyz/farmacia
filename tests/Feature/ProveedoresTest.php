@@ -5,8 +5,16 @@ use App\Models\Proveedor;
 use App\Models\User;
 use Livewire\Livewire;
 
-test('authenticated users can visit the proveedores index page', function () {
+test('unauthorized users cannot visit the proveedores index page', function () {
     $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('administracion.proveedores'))
+        ->assertStatus(403);
+});
+
+test('authenticated users with permission can visit the proveedores index page', function () {
+    $user = User::factory()->admin()->create();
 
     $this->actingAs($user)
         ->get(route('administracion.proveedores'))
@@ -15,7 +23,7 @@ test('authenticated users can visit the proveedores index page', function () {
 });
 
 test('can create a new proveedor and close modal', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->admin()->create();
 
     Livewire::actingAs($user)
         ->test(Proveedores::class)
@@ -40,8 +48,28 @@ test('can create a new proveedor and close modal', function () {
     ]);
 });
 
-test('can search proveedores by name, nit, celular or razon_social', function () {
+test('unauthorized users cannot create, edit or delete proveedores', function () {
     $user = User::factory()->create();
+    $proveedor = Proveedor::create(['nombre' => 'Proveedor Protegido']);
+
+    Livewire::actingAs($user)
+        ->test(Proveedores::class)
+        ->call('create')
+        ->assertStatus(403);
+
+    Livewire::actingAs($user)
+        ->test(Proveedores::class)
+        ->call('edit', $proveedor->id)
+        ->assertStatus(403);
+
+    Livewire::actingAs($user)
+        ->test(Proveedores::class)
+        ->call('delete', $proveedor->id)
+        ->assertStatus(403);
+});
+
+test('can search proveedores by name, nit, celular or razon_social', function () {
+    $user = User::factory()->admin()->create();
 
     Proveedor::create(['nombre' => 'Droguería Inti', 'nit' => '99887766']);
     Proveedor::create(['nombre' => 'Laboratorio Vita', 'nit' => '11223344']);
@@ -54,7 +82,7 @@ test('can search proveedores by name, nit, celular or razon_social', function ()
 });
 
 test('can edit an existing proveedor', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->admin()->create();
     $proveedor = Proveedor::create([
         'nombre' => 'Nombre Viejo',
         'nit' => '1000',
@@ -79,7 +107,7 @@ test('can edit an existing proveedor', function () {
 });
 
 test('can soft delete a proveedor', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->admin()->create();
     $proveedor = Proveedor::create([
         'nombre' => 'Proveedor Por Eliminar',
     ]);

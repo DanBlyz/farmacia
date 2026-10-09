@@ -8,8 +8,16 @@ use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 
-test('authenticated users can visit the usuarios index page', function () {
+test('unauthorized users cannot visit the usuarios index page', function () {
     $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('administracion.usuarios'))
+        ->assertStatus(403);
+});
+
+test('authenticated users with permission can visit the usuarios index page', function () {
+    $user = User::factory()->admin()->create();
 
     $this->actingAs($user)
         ->get(route('administracion.usuarios'))
@@ -18,7 +26,7 @@ test('authenticated users can visit the usuarios index page', function () {
 });
 
 test('can create a new usuario with password auto-assigned from cedula and linked to sucursal point of sale', function () {
-    $admin = User::factory()->create();
+    $admin = User::factory()->admin()->create();
     $rol = Rol::create(['nombre' => 'Cajero']);
     $sucursal = Sucursal::create(['nombre' => 'Sucursal Central', 'codigo_sucursal' => 0]);
     $puntoVenta = PuntoVenta::create([
@@ -53,8 +61,28 @@ test('can create a new usuario with password auto-assigned from cedula and linke
     expect(Hash::check('44556677', $newUser->password))->toBeTrue();
 });
 
+test('unauthorized users cannot create, edit or delete usuarios', function () {
+    $user = User::factory()->create();
+    $targetUser = User::factory()->create(['name' => 'Usuario Protegido']);
+
+    Livewire::actingAs($user)
+        ->test(Usuarios::class)
+        ->call('create')
+        ->assertStatus(403);
+
+    Livewire::actingAs($user)
+        ->test(Usuarios::class)
+        ->call('edit', $targetUser->id)
+        ->assertStatus(403);
+
+    Livewire::actingAs($user)
+        ->test(Usuarios::class)
+        ->call('delete', $targetUser->id)
+        ->assertStatus(403);
+});
+
 test('can search usuarios by name, email or cedula', function () {
-    $admin = User::factory()->create();
+    $admin = User::factory()->admin()->create();
 
     User::factory()->create(['name' => 'Mario Valenzuela', 'cedula' => '99887711']);
     User::factory()->create(['name' => 'Soledad Pastorutti', 'cedula' => '33221100']);
@@ -67,7 +95,7 @@ test('can search usuarios by name, email or cedula', function () {
 });
 
 test('can edit an existing usuario without changing their password', function () {
-    $admin = User::factory()->create();
+    $admin = User::factory()->admin()->create();
     $rol = Rol::create(['nombre' => 'Administrador']);
     $sucursal = Sucursal::create(['nombre' => 'Sucursal Norte', 'codigo_sucursal' => 1]);
     $puntoVenta = PuntoVenta::create([
@@ -104,7 +132,7 @@ test('can edit an existing usuario without changing their password', function ()
 });
 
 test('can soft delete another user but prevents deleting self', function () {
-    $admin = User::factory()->create();
+    $admin = User::factory()->admin()->create();
     $otherUser = User::factory()->create(['name' => 'Otro Usuario']);
 
     Livewire::actingAs($admin)
@@ -120,7 +148,7 @@ test('can soft delete another user but prevents deleting self', function () {
     Livewire::actingAs($admin)
         ->test(Usuarios::class)
         ->call('delete', $admin->id)
-        ->assertSee('No puedes eliminar tu propia cuenta');
+        ->assertDispatched('swal');
 
     $this->assertDatabaseHas('users', [
         'id' => $admin->id,
@@ -129,7 +157,7 @@ test('can soft delete another user but prevents deleting self', function () {
 });
 
 test('can reset a user password via modal', function () {
-    $admin = User::factory()->create();
+    $admin = User::factory()->admin()->create();
     $targetUser = User::factory()->create([
         'name' => 'Usuario Para Clave Nueva',
         'nombres' => 'Usuario Para Clave Nueva',

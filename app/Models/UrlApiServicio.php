@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class UrlApiServicio extends Model
 {
-    use HasFactory, SoftDeletes;
+    use Auditable, HasFactory, SoftDeletes;
+
     protected $table = 'url_api_servicios';
 
     protected $fillable = [
@@ -20,7 +22,7 @@ class UrlApiServicio extends Model
         'nombre',
         'url_servicio',
         'estado',
-        'deleted_at'
+        'deleted_at',
     ];
 
     public function getUrlCodigos($ambiente, $modalidad)

@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Factura extends Model
 {
-    use HasFactory, SoftDeletes;
+    use Auditable, HasFactory, SoftDeletes;
+
     protected $table = 'facturas';
 
     protected $fillable = [
@@ -42,22 +44,26 @@ class Factura extends Model
         'uso_cafc',
         'monto_gift_card',
         'estado',
-        'deleted_at'
+        'deleted_at',
     ];
 
-    public function usuarioCreador(){
+    public function usuarioCreador()
+    {
         return $this->belongsTo('App\Models\User', 'usuario_creador_id');
     }
 
-    public function sucursal(){
+    public function sucursal()
+    {
         return $this->belongsTo('App\Models\Sucursal', 'sucursal_id');
     }
 
-    public function cliente(){
+    public function cliente()
+    {
         return $this->belongsTo(Cliente::class);
     }
 
-    public function detalles(){
+    public function detalles()
+    {
         return $this->hasMany(Detalle::class);
     }
 

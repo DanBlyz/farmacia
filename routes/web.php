@@ -23,20 +23,19 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    // Módulos del Sistema ERP
-
-    Route::prefix('/administracion')->group(function () {
-        Route::get('/roles', Roles::class)->name('administracion.roles');
-        Route::get('/sucursales', Sucursales::class)->name('administracion.sucursales');
-        Route::get('/proveedores', Proveedores::class)->name('administracion.proveedores');
-        Route::get('/clientes', Clientes::class)->name('administracion.clientes');
-        Route::get('/usuarios', Usuarios::class)->name('administracion.usuarios');
+    // Módulos del Sistema
+    Route::prefix('administracion')->as('administracion.')->group(function () {
+        Route::get('/sucursales', Sucursales::class)->middleware('permiso:administracion.sucursales.ver')->name('sucursales');
+        Route::get('/usuarios', Usuarios::class)->middleware('permiso:administracion.usuarios.ver')->name('usuarios');
+        Route::get('/roles', Roles::class)->middleware('permiso:administracion.roles.ver')->name('roles');
+        Route::get('/clientes', Clientes::class)->middleware('permiso:administracion.clientes.ver')->name('clientes');
+        Route::get('/proveedores', Proveedores::class)->middleware('permiso:administracion.proveedores.ver')->name('proveedores');
     });
 
-    Route::prefix('/sincronizacion')->group(function () {
-        Route::get('/catalogos', Catalogos::class)->name('sincronizacion.catalogos');
-        Route::get('/eventos-significativos', EventosSignificativos::class)->name('sincronizacion.eventos');
+    Route::prefix('sincronizacion')->as('sincronizacion.')->group(function () {
+        Route::get('/catalogos', Catalogos::class)->middleware('permiso:sincronizacion.catalogos.ver')->name('catalogos');
+        Route::get('/eventos-significativos', EventosSignificativos::class)->middleware('permiso:sincronizacion.eventos.ver')->name('eventos');
     });
 });
 
-require __DIR__ . '/auth.php';
+require __DIR__.'/auth.php';

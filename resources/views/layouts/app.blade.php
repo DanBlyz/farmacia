@@ -78,6 +78,83 @@
 
         <!-- Scripts globales de ayuda y confirmación (SweetAlert2) -->
         <script>
+            window.addEventListener('swal', (event) => {
+                const data = Array.isArray(event.detail) ? event.detail[0] : event.detail;
+                if (!data) return;
+
+                if (data.toast !== false) {
+                    const Toast = Swal.mixin({
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 3000,
+                        timerProgressBar: true,
+                        background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff',
+                        color: document.documentElement.classList.contains('dark') ? '#f8fafc' : '#1e293b',
+                        customClass: {
+                            popup: 'rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl font-sans'
+                        }
+                    });
+                    Toast.fire({
+                        icon: data.icon || 'success',
+                        title: data.title || '',
+                        text: data.text || ''
+                    });
+                } else {
+                    Swal.fire({
+                        icon: data.icon || 'info',
+                        title: data.title || '',
+                        text: data.text || '',
+                        confirmButtonColor: '#0d9488',
+                        background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff',
+                        color: document.documentElement.classList.contains('dark') ? '#f8fafc' : '#1e293b',
+                        customClass: {
+                            popup: 'rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl font-sans p-6',
+                            confirmButton: 'px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-white shadow-md shadow-teal-500/20 transition-all'
+                        }
+                    });
+                }
+            });
+
+            window.addEventListener('swal:confirm', (event) => {
+                const data = Array.isArray(event.detail) ? event.detail[0] : event.detail;
+                if (!data) return;
+
+                const safeParams = Array.isArray(data.params) ? data.params : (data.params !== undefined ? [data.params] : []);
+
+                Swal.fire({
+                    title: data.title || '¿Está seguro?',
+                    text: data.text || 'Esta acción no se puede deshacer.',
+                    icon: data.icon || 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#e11d48',
+                    cancelButtonColor: '#64748b',
+                    confirmButtonText: data.confirmButtonText || 'Sí, confirmar',
+                    cancelButtonText: data.cancelButtonText || 'Cancelar',
+                    reverseButtons: true,
+                    background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff',
+                    color: document.documentElement.classList.contains('dark') ? '#f8fafc' : '#1e293b',
+                    customClass: {
+                        popup: 'rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl font-sans p-6',
+                        confirmButton: 'px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-white shadow-md shadow-rose-500/20 ml-2 transition-all',
+                        cancelButton: 'px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-white transition-all'
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        if (data.componentId && data.method && window.Livewire) {
+                            const component = window.Livewire.find(data.componentId);
+                            if (component) {
+                                component.call(data.method, ...safeParams);
+                                return;
+                            }
+                        }
+                        if (data.event && window.Livewire) {
+                            window.Livewire.dispatch(data.event, safeParams);
+                        }
+                    }
+                });
+            });
+
             window.showConfirmSwal = function(title, html, onConfirm) {
                 Swal.fire({
                     title: title,
@@ -86,13 +163,13 @@
                     showCancelButton: true,
                     confirmButtonColor: '#e11d48',
                     cancelButtonColor: '#64748b',
-                    confirmButtonText: '<svg class="w-4 h-4 inline mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg> Sí, continuar y eliminar',
+                    confirmButtonText: 'Sí, continuar y eliminar',
                     cancelButtonText: 'Cancelar',
                     reverseButtons: true,
                     background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff',
                     color: document.documentElement.classList.contains('dark') ? '#f8fafc' : '#1e293b',
                     customClass: {
-                        popup: 'rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl font-sans p-6',
+                        popup: 'rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl font-sans p-6',
                         confirmButton: 'px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-white shadow-md shadow-rose-500/20 ml-2 transition-all',
                         cancelButton: 'px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-white transition-all'
                     }
@@ -113,7 +190,7 @@
                     background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff',
                     color: document.documentElement.classList.contains('dark') ? '#f8fafc' : '#1e293b',
                     customClass: {
-                        popup: 'rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl font-sans'
+                        popup: 'rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl font-sans'
                     }
                 });
             };

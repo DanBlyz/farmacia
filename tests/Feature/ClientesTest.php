@@ -5,8 +5,16 @@ use App\Models\Cliente;
 use App\Models\User;
 use Livewire\Livewire;
 
-test('authenticated users can visit the clientes index page', function () {
+test('unauthorized users cannot visit the clientes index page', function () {
     $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('administracion.clientes'))
+        ->assertStatus(403);
+});
+
+test('authenticated users with permission can visit the clientes index page', function () {
+    $user = User::factory()->admin()->create();
 
     $this->actingAs($user)
         ->get(route('administracion.clientes'))
@@ -15,7 +23,7 @@ test('authenticated users can visit the clientes index page', function () {
 });
 
 test('can create a new cliente and close modal', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->admin()->create();
 
     Livewire::actingAs($user)
         ->test(Clientes::class)
@@ -48,8 +56,28 @@ test('can create a new cliente and close modal', function () {
     ]);
 });
 
-test('can search clientes by nombres, ap_paterno, cedula or nit', function () {
+test('unauthorized users cannot create, edit or delete clientes', function () {
     $user = User::factory()->create();
+    $cliente = Cliente::create(['nombres' => 'Cliente Protegido']);
+
+    Livewire::actingAs($user)
+        ->test(Clientes::class)
+        ->call('create')
+        ->assertStatus(403);
+
+    Livewire::actingAs($user)
+        ->test(Clientes::class)
+        ->call('edit', $cliente->id)
+        ->assertStatus(403);
+
+    Livewire::actingAs($user)
+        ->test(Clientes::class)
+        ->call('delete', $cliente->id)
+        ->assertStatus(403);
+});
+
+test('can search clientes by nombres, ap_paterno, cedula or nit', function () {
+    $user = User::factory()->admin()->create();
 
     Cliente::create(['nombres' => 'Fernando', 'ap_paterno' => 'Alonso', 'cedula' => '111111']);
     Cliente::create(['nombres' => 'Carlos', 'ap_paterno' => 'Sainz', 'cedula' => '222222']);
@@ -62,7 +90,7 @@ test('can search clientes by nombres, ap_paterno, cedula or nit', function () {
 });
 
 test('can edit an existing cliente', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->admin()->create();
     $cliente = Cliente::create([
         'nombres' => 'Pedro',
         'ap_paterno' => 'Gómez',
@@ -88,7 +116,7 @@ test('can edit an existing cliente', function () {
 });
 
 test('can soft delete a cliente', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->admin()->create();
     $cliente = Cliente::create([
         'nombres' => 'Cliente Por Eliminar',
     ]);

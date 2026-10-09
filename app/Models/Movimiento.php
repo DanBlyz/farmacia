@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Movimiento extends Model
 {
-    use HasFactory, SoftDeletes;
+    use Auditable, HasFactory, SoftDeletes;
+
     protected $table = 'movimientos';
 
     protected $fillable = [
@@ -26,51 +28,57 @@ class Movimiento extends Model
         'fecha',
         'descripcion',
         'estado',
-        'deleted_at'
+        'deleted_at',
     ];
 
-    public function sucursal(){
+    public function sucursal()
+    {
         return $this->belongsTo(Sucursal::class);
     }
 
-    public function producto(){
+    public function producto()
+    {
         return $this->belongsTo(Producto::class);
     }
 
-    public function usuarioCreador(){
+    public function usuarioCreador()
+    {
         return $this->belongsTo(User::class, 'usuario_creador_id');
     }
 
-    public function detalle(){
+    public function detalle()
+    {
         return $this->belongsTo(Detalle::class);
     }
 
-    public function cantidaDisponileACiertaFecha($sucursal_id, $servicio_id, $fecha_ini, $fecha_fin){
+    public function cantidaDisponileACiertaFecha($sucursal_id, $servicio_id, $fecha_ini, $fecha_fin)
+    {
         $ingresos = Movimiento::where('sucursal_id', $sucursal_id)
-                                    ->where('producto_id', $servicio_id)
-                                    ->where('ingreso', '>',0)
-                                    ->where('fecha' , '<=', $fecha_ini)
-                                    ->sum('ingreso');
+            ->where('producto_id', $servicio_id)
+            ->where('ingreso', '>', 0)
+            ->where('fecha', '<=', $fecha_ini)
+            ->sum('ingreso');
 
         $salidas = Movimiento::where('sucursal_id', $sucursal_id)
-                                ->where('producto_id', $servicio_id)
-                                ->where('salida', '>',0)
-                                ->where('fecha' , '<=', $fecha_fin)
-                                ->sum('salida');
+            ->where('producto_id', $servicio_id)
+            ->where('salida', '>', 0)
+            ->where('fecha', '<=', $fecha_fin)
+            ->sum('salida');
 
         return $ingresos - $salidas;
     }
 
-    public function cantidaDisponile($sucursal_id, $servicio_id){
+    public function cantidaDisponile($sucursal_id, $servicio_id)
+    {
         $ingresos = Movimiento::where('sucursal_id', $sucursal_id)
-                                    ->where('producto_id', $servicio_id)
-                                    ->where('ingreso', '>',0)
-                                    ->sum('ingreso');
+            ->where('producto_id', $servicio_id)
+            ->where('ingreso', '>', 0)
+            ->sum('ingreso');
 
         $salidas = Movimiento::where('sucursal_id', $sucursal_id)
-                                ->where('producto_id', $servicio_id)
-                                ->where('salida', '>',0)
-                                ->sum('salida');
+            ->where('producto_id', $servicio_id)
+            ->where('salida', '>', 0)
+            ->sum('salida');
 
         return $ingresos - $salidas;
     }

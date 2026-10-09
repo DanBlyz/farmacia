@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class TipoDocumentoSector extends Model
 {
-    use SoftDeletes;
+    use Auditable, SoftDeletes;
+
     protected $table = 'tipo_documento_sectores';
 
     protected $fillable = [
@@ -17,6 +19,6 @@ class TipoDocumentoSector extends Model
         'codigo_clasificador',
         'descripcion',
         'estado',
-        'deleted_at'
+        'deleted_at',
     ];
 }

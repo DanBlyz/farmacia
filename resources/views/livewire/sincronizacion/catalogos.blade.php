@@ -38,8 +38,8 @@
             @foreach($tabs as $key => $label)
                 <button 
                     @click="activeTab = '{{ $key }}'" 
-                    :class="activeTab === '{{ $key }}' ? 'border-[#c72044] text-[#c72044] bg-[#c72044]/5 dark:bg-[#c72044]/10 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 font-semibold'"
-                    class="px-5 py-4 text-sm whitespace-nowrap border-b-2 transition-all focus:outline-none">
+                    :class="activeTab === '{{ $key }}' ? 'border-teal-600 text-teal-600 bg-teal-50 dark:bg-teal-950/40 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 font-semibold'"
+                    class="px-5 py-4 text-sm whitespace-nowrap border-b-2 transition-all focus:outline-none cursor-pointer">
                     {{ $label }}
                 </button>
             @endforeach
@@ -51,16 +51,23 @@
                 <div x-show="activeTab === '{{ $key }}'" style="display: none;" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0">
                     
                     <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-bold text-slate-700 dark:text-slate-200">Catálogo de {{ $label }}</h3>
+                        <h3 class="text-base font-bold text-slate-800 dark:text-slate-200">Catálogo de {{ $label }}</h3>
                         
-                        <button type="button" 
-                                wire:click="sincronizar('{{ $key }}')"
-                                wire:loading.attr="disabled"
-                                class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-semibold text-xs shadow-sm flex items-center gap-2 transition-all focus:outline-none disabled:opacity-50">
-                            <svg wire:loading.remove wire:target="sincronizar('{{ $key }}')" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                            <svg wire:loading wire:target="sincronizar('{{ $key }}')" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                            <span>Sincronizar {{ $label }}</span>
-                        </button>
+                        @permiso('sincronizacion.catalogos.sincronizar')
+                            <button type="button" 
+                                    wire:click="sincronizar('{{ $key }}')"
+                                    wire:loading.attr="disabled"
+                                    class="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-2xs flex items-center gap-2 transition-all focus:outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span wire:loading.remove wire:target="sincronizar('{{ $key }}')" class="flex items-center gap-2">
+                                    <i class="fas fa-sync-alt text-xs"></i>
+                                    <span>Sincronizar {{ $label }}</span>
+                                </span>
+                                <span wire:loading wire:target="sincronizar('{{ $key }}')" class="flex items-center gap-2">
+                                    <i class="fas fa-spinner fa-spin text-xs"></i>
+                                    <span>Sincronizando...</span>
+                                </span>
+                            </button>
+                        @endpermiso
                     </div>
 
                     <div class="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-2xl max-h-[60vh]">

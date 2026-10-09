@@ -3,6 +3,7 @@
 namespace App\Livewire\Administracion;
 
 use App\Models\Cliente;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
@@ -21,15 +22,25 @@ class Clientes extends Component
 
     // Estado del Formulario / Modal
     public bool $showModal = false;
+
     public ?int $clienteId = null;
+
     public string $nombres = '';
+
     public string $ap_paterno = '';
+
     public string $ap_materno = '';
+
     public string $cedula = '';
+
     public string $complemento = '';
+
     public string $nit = '';
+
     public string $razon_social = '';
+
     public string $correo = '';
+
     public string $numero_celular = '';
 
     public function updatedSearch(): void
@@ -44,12 +55,14 @@ class Clientes extends Component
 
     public function create(): void
     {
+        abort_if(! Auth::user()->tienePermiso('administracion.clientes.crear'), 403, 'No tiene permiso para crear clientes.');
         $this->resetForm();
         $this->showModal = true;
     }
 
     public function edit(int $id): void
     {
+        abort_if(! Auth::user()->tienePermiso('administracion.clientes.editar'), 403, 'No tiene permiso para editar clientes.');
         $this->resetForm();
         $cliente = Cliente::findOrFail($id);
         $this->clienteId = $cliente->id;
@@ -67,6 +80,12 @@ class Clientes extends Component
 
     public function save(): void
     {
+        if ($this->clienteId) {
+            abort_if(! Auth::user()->tienePermiso('administracion.clientes.editar'), 403, 'No tiene permiso para editar clientes.');
+        } else {
+            abort_if(! Auth::user()->tienePermiso('administracion.clientes.crear'), 403, 'No tiene permiso para crear clientes.');
+        }
+
         $this->validate([
             'nombres' => 'required|string|max:150',
             'ap_paterno' => 'nullable|string|max:100',
@@ -105,7 +124,12 @@ class Clientes extends Component
                 'numero_celular' => trim($this->numero_celular),
                 'usuario_modificador_id' => Auth::id(),
             ]);
-            session()->flash('message', 'Cliente actualizado exitosamente.');
+
+            $this->dispatch('swal', [
+                'icon' => 'success',
+                'title' => '¡Operación Exitosa!',
+                'text' => 'Cliente actualizado exitosamente.',
+            ]);
         } else {
             Cliente::create([
                 'nombres' => trim($this->nombres),
@@ -119,7 +143,12 @@ class Clientes extends Component
                 'numero_celular' => trim($this->numero_celular),
                 'usuario_creador_id' => Auth::id(),
             ]);
-            session()->flash('message', 'Cliente registrado exitosamente.');
+
+            $this->dispatch('swal', [
+                'icon' => 'success',
+                'title' => '¡Operación Exitosa!',
+                'text' => 'Cliente registrado exitosamente.',
+            ]);
         }
 
         $this->closeModal();
@@ -127,14 +156,19 @@ class Clientes extends Component
 
     public function delete(int $id): void
     {
+        abort_if(! Auth::user()->tienePermiso('administracion.clientes.eliminar'), 403, 'No tiene permiso para eliminar clientes.');
+
         $cliente = Cliente::findOrFail($id);
         $cliente->update([
             'usuario_eliminador_id' => Auth::id(),
         ]);
         $cliente->delete();
 
-        session()->flash('message', 'Cliente eliminado del sistema.');
-        $this->dispatch('cliente-deleted', message: 'Cliente eliminado del catálogo exitosamente.');
+        $this->dispatch('swal', [
+            'icon' => 'success',
+            'title' => '¡Eliminado!',
+            'text' => 'Cliente eliminado del catálogo exitosamente.',
+        ]);
     }
 
     public function closeModal(): void
@@ -153,18 +187,18 @@ class Clientes extends Component
         $this->resetErrorBag();
     }
 
-    public function render()
+    public function render(): View
     {
         $clientes = Cliente::query()
             ->when($this->search !== '', function ($query) {
                 $query->where(function ($q) {
-                    $q->where('nombres', 'like', '%' . trim($this->search) . '%')
-                        ->orWhere('ap_paterno', 'like', '%' . trim($this->search) . '%')
-                        ->orWhere('ap_materno', 'like', '%' . trim($this->search) . '%')
-                        ->orWhere('cedula', 'like', '%' . trim($this->search) . '%')
-                        ->orWhere('nit', 'like', '%' . trim($this->search) . '%')
-                        ->orWhere('razon_social', 'like', '%' . trim($this->search) . '%')
-                        ->orWhere('numero_celular', 'like', '%' . trim($this->search) . '%');
+                    $q->where('nombres', 'like', '%'.trim($this->search).'%')
+                        ->orWhere('ap_paterno', 'like', '%'.trim($this->search).'%')
+                        ->orWhere('ap_materno', 'like', '%'.trim($this->search).'%')
+                        ->orWhere('cedula', 'like', '%'.trim($this->search).'%')
+                        ->orWhere('nit', 'like', '%'.trim($this->search).'%')
+                        ->orWhere('razon_social', 'like', '%'.trim($this->search).'%')
+                        ->orWhere('numero_celular', 'like', '%'.trim($this->search).'%');
                 });
             })
             ->orderBy('id', 'desc')

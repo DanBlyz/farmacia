@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class TipoEventoSignificativo extends Model
 {
-    use HasFactory, SoftDeletes;
+    use Auditable, HasFactory, SoftDeletes;
+
     protected $table = 'tipo_evento_significativos';
 
     protected $fillable = [
@@ -18,6 +20,6 @@ class TipoEventoSignificativo extends Model
         'codigo_clasificador',
         'descripcion',
         'estado',
-        'deleted_at'
+        'deleted_at',
     ];
 }

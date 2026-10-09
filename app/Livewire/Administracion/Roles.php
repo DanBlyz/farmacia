@@ -3,6 +3,7 @@
 namespace App\Livewire\Administracion;
 
 use App\Models\Rol;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
@@ -21,7 +22,9 @@ class Roles extends Component
 
     // Estado del Formulario / Modal
     public bool $showModal = false;
+
     public ?int $rolId = null;
+
     public string $nombre = '';
 
     public function updatedSearch(): void
@@ -36,12 +39,14 @@ class Roles extends Component
 
     public function create(): void
     {
+        abort_if(! Auth::user()->tienePermiso('administracion.roles.crear'), 403, 'No tiene permiso para crear roles.');
         $this->resetForm();
         $this->showModal = true;
     }
 
     public function edit(int $id): void
     {
+        abort_if(! Auth::user()->tienePermiso('administracion.roles.editar'), 403, 'No tiene permiso para editar roles.');
         $this->resetForm();
         $rol = Rol::findOrFail($id);
         $this->rolId = $rol->id;
@@ -51,8 +56,14 @@ class Roles extends Component
 
     public function save(): void
     {
+        if ($this->rolId) {
+            abort_if(! Auth::user()->tienePermiso('administracion.roles.editar'), 403, 'No tiene permiso para editar roles.');
+        } else {
+            abort_if(! Auth::user()->tienePermiso('administracion.roles.crear'), 403, 'No tiene permiso para crear roles.');
+        }
+
         $this->validate([
-            'nombre' => 'required|string|max:100|unique:roles,nombre,' . ($this->rolId ?? 'NULL') . ',id,deleted_at,NULL',
+            'nombre' => 'required|string|max:100|unique:roles,nombre,'.($this->rolId ?? 'NULL').',id,deleted_at,NULL',
         ], [
             'nombre.required' => 'El nombre del rol es obligatorio.',
             'nombre.max' => 'El nombre no debe exceder los 100 caracteres.',
@@ -65,13 +76,23 @@ class Roles extends Component
                 'nombre' => trim($this->nombre),
                 'usuario_modificador_id' => Auth::id(),
             ]);
-            session()->flash('message', 'Rol actualizado exitosamente.');
+
+            $this->dispatch('swal', [
+                'icon' => 'success',
+                'title' => '¡Operación Exitosa!',
+                'text' => 'Rol actualizado exitosamente.',
+            ]);
         } else {
             Rol::create([
                 'nombre' => trim($this->nombre),
                 'usuario_creador_id' => Auth::id(),
             ]);
-            session()->flash('message', 'Rol registrado exitosamente.');
+
+            $this->dispatch('swal', [
+                'icon' => 'success',
+                'title' => '¡Operación Exitosa!',
+                'text' => 'Rol registrado exitosamente.',
+            ]);
         }
 
         $this->closeModal();
@@ -79,14 +100,19 @@ class Roles extends Component
 
     public function delete(int $id): void
     {
+        abort_if(! Auth::user()->tienePermiso('administracion.roles.eliminar'), 403, 'No tiene permiso para eliminar roles.');
+
         $rol = Rol::findOrFail($id);
         $rol->update([
             'usuario_eliminador_id' => Auth::id(),
         ]);
         $rol->delete();
 
-        session()->flash('message', 'Rol eliminado del sistema.');
-        $this->dispatch('role-deleted', message: 'Rol eliminado del catálogo exitosamente.');
+        $this->dispatch('swal', [
+            'icon' => 'success',
+            'title' => '¡Eliminado!',
+            'text' => 'Rol eliminado del catálogo exitosamente.',
+        ]);
     }
 
     public function closeModal(): void
@@ -101,11 +127,11 @@ class Roles extends Component
         $this->resetErrorBag();
     }
 
-    public function render()
+    public function render(): View
     {
         $roles = Rol::query()
             ->when($this->search !== '', function ($query) {
-                $query->where('nombre', 'like', '%' . trim($this->search) . '%');
+                $query->where('nombre', 'like', '%'.trim($this->search).'%');
             })
             ->orderBy('id', 'desc')
             ->paginate($this->perPage);

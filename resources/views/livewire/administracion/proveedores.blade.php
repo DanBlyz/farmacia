@@ -33,8 +33,8 @@
         <!-- 1. Cabecera y Botón Nuevo -->
         <div class="p-6 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 from-purple-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-purple-500/20 shrink-0">
-                    <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                <div class="w-10 h-10 rounded-2xl bg-teal-600 flex items-center justify-center text-white shadow-md shrink-0">
+                    <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                 </div>
                 <div>
                     <h1 class="text-lg font-bold text-slate-800 dark:text-white leading-tight">Listado de Proveedores</h1>
@@ -43,43 +43,52 @@
             </div>
 
             <div class="flex items-center gap-3 self-start sm:self-auto">
+                @permiso('administracion.proveedores.crear')
                 <button wire:click="create" 
-                        class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-semibold text-xs sm:text-sm shadow-md shadow-teal-500/20 transition duration-150 flex items-center gap-2">
+                        class="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs sm:text-sm shadow-md transition duration-150 flex items-center gap-2 cursor-pointer">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" /></svg>
                     <span>Nuevo Proveedor</span>
                 </button>
+                @endpermiso
             </div>
         </div>
 
         <!-- 2. Barra de Filtros y Búsqueda en la misma fila -->
-        <div class="px-6 py-4 bg-slate-50/60 dark:bg-slate-800/30 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <!-- Selector de Paginación (Lado Izquierdo) -->
-            <div class="flex items-center gap-2.5 text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                <span>Mostrar</span>
-                <select wire:model.live="perPage" 
-                        class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all shadow-sm">
-                    <option value="10">10</option>
-                    <option value="25">25</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                </select>
-                <span>registros por página</span>
-            </div>
-
-            <!-- Buscador por Nombre, NIT, Razón Social o Celular (Lado Derecho con ancho definido) -->
-            <div class="relative w-full sm:w-72 sm:ml-auto">
-                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        <div class="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <!-- Izquierda: Paginación Dinámica -->
+                <div class="flex items-center gap-2">
+                    <label for="perPage" class="text-xs font-medium text-slate-600 dark:text-slate-400">Mostrar:</label>
+                    <select 
+                        id="perPage" 
+                        wire:model.live="perPage" 
+                        class="text-xs rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-teal-500 py-1.5 px-2.5 shadow-2xs"
+                    >
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                    <span class="text-xs text-slate-500 dark:text-slate-400">registros</span>
                 </div>
-                <input type="text" 
-                       wire:model.live.debounce.300ms="search" 
-                       placeholder="Buscar por nombre, NIT o celular..." 
-                       class="w-full pl-10 pr-9 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 focus:outline-none transition-all shadow-sm">
-                @if($search !== '')
-                    <button wire:click="$set('search', '')" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                @endif
+
+                <!-- Derecha: Buscador Debounce -->
+                <div class="relative w-full md:w-80">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <i class="fas fa-search text-xs"></i>
+                    </div>
+                    <input 
+                        type="text" 
+                        wire:model.live.debounce.300ms="search" 
+                        placeholder="Buscar por nombre, NIT o celular..." 
+                        class="w-full pl-9 pr-8 py-2 text-xs rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-teal-500 shadow-2xs"
+                    />
+                    @if ($search !== '')
+                        <button wire:click="$set('search', '')" type="button" class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
+                            <i class="fas fa-times-circle text-xs"></i>
+                        </button>
+                    @endif
+                </div>
             </div>
         </div>
 
@@ -127,17 +136,32 @@
                             </td>
                             <td class="py-4 px-6 text-right">
                                 <div class="flex items-center justify-end gap-2">
+                                    @permiso('administracion.proveedores.editar')
                                     <button wire:click="edit({{ $proveedor->id }})" 
-                                            class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-950 hover:text-teal-600 dark:hover:text-teal-400 transition-colors focus:outline-none"
+                                            class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-950 hover:text-teal-600 dark:hover:text-teal-400 transition-colors focus:outline-none cursor-pointer"
                                             title="Editar Proveedor">
                                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                     </button>
-                                    <button @click="$dispatch('confirm-delete-proveedor', { id: {{ $proveedor->id }}, nombre: '{{ addslashes($proveedor->nombre) }}' })" 
-                                            type="button"
-                                            class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950 hover:text-rose-600 dark:hover:text-rose-400 transition-colors focus:outline-none"
+                                    @endpermiso
+
+                                    @permiso('administracion.proveedores.eliminar')
+                                    <button type="button"
+                                            @click="$dispatch('swal:confirm', {
+                                                title: '¿Está seguro de eliminar este proveedor?',
+                                                text: 'Se eliminará a {{ addslashes($proveedor->nombre) }} del catálogo. Esta acción registrará auditoría.',
+                                                icon: 'warning',
+                                                confirmButtonText: 'Sí, eliminar',
+                                                cancelButtonText: 'Cancelar',
+                                                event: 'delete',
+                                                componentId: '{{ $this->getId() }}',
+                                                method: 'delete',
+                                                params: [{{ $proveedor->id }}]
+                                            })" 
+                                            class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950 hover:text-rose-600 dark:hover:text-rose-400 transition-colors focus:outline-none cursor-pointer"
                                             title="Eliminar Proveedor">
                                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                     </button>
+                                    @endpermiso
                                 </div>
                             </td>
                         </tr>
@@ -151,7 +175,7 @@
                                     <p class="text-sm font-semibold text-slate-600 dark:text-slate-300">No se encontraron proveedores</p>
                                     <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">No hay coincidencias con tu búsqueda actual o aún no se han creado registros en el catálogo.</p>
                                     @if($search !== '')
-                                        <button wire:click="$set('search', '')" class="mt-4 px-4 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-medium transition-colors">
+                                        <button wire:click="$set('search', '')" class="mt-4 px-4 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-medium transition-colors cursor-pointer">
                                             Limpiar filtro de búsqueda
                                         </button>
                                     @endif
@@ -182,19 +206,21 @@
             <div class="relative bg-white dark:bg-slate-900 rounded-3xl text-left overflow-hidden shadow-2xl transform transition-all max-w-xl w-full border border-slate-200 dark:border-slate-800 z-10 my-auto">
                 <form wire:submit="save">
                     <!-- Cabecera del Modal -->
-                    <div class="px-6 py-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <div>
-                                <h3 class="text-base font-bold text-slate-800 dark:text-white leading-tight" id="modal-title">
-                                    {{ $proveedorId ? 'Editar Datos de Proveedor' : 'Registrar Nuevo Proveedor' }}
-                                </h3>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">
-                                    {{ $proveedorId ? 'Modifica los datos del socio comercial o laboratorio' : 'Ingresa el nombre, razón social y datos de contacto' }}
-                                </p>
-                            </div>
+                    <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                        <div class="flex items-center gap-2.5">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600 text-white text-sm">
+                                <i class="fas {{ $proveedorId ? 'fa-edit' : 'fa-plus' }}"></i>
+                            </span>
+                            <h3 class="text-base font-bold text-slate-800 dark:text-slate-100" id="modal-title">
+                                {{ $proveedorId ? 'Editar Proveedor' : 'Nuevo Proveedor' }}
+                            </h3>
                         </div>
-                        <button type="button" wire:click="closeModal" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        <button 
+                            wire:click="closeModal" 
+                            type="button" 
+                            class="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                        >
+                            <i class="fas fa-times text-base"></i>
                         </button>
                     </div>
 
@@ -291,17 +317,22 @@
                     <div class="px-6 py-4 bg-slate-50/80 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-3">
                         <button type="button" 
                                 wire:click="closeModal" 
-                                class="px-4 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs sm:text-sm transition-colors">
+                                class="px-4 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs sm:text-sm transition-colors cursor-pointer">
                             Cancelar
                         </button>
 
                         <button type="submit" 
                                 wire:loading.attr="disabled"
                                 wire:target="save"
-                                class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-semibold text-xs sm:text-sm shadow-md shadow-teal-500/20 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                            <svg wire:loading.remove wire:target="save" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
-                            <svg wire:loading wire:target="save" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                            <span>Guardar</span>
+                                class="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs sm:text-sm shadow-md transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+                            <span wire:loading.remove wire:target="save" class="inline-flex items-center gap-1.5">
+                                <i class="fas fa-save"></i>
+                                <span>Guardar</span>
+                            </span>
+                            <span wire:loading wire:target="save" class="inline-flex items-center gap-1.5">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <span>Procesando...</span>
+                            </span>
                         </button>
                     </div>
                 </form>
@@ -309,22 +340,3 @@
         </div>
     @endif
 </div>
-
-@push('scripts')
-<script>
-    document.addEventListener('livewire:init', () => {
-        window.addEventListener('confirm-delete-proveedor', (event) => {
-            const data = event.detail;
-            window.showConfirmSwal(
-                '¿Confirmar eliminación?',
-                `Estás a punto de eliminar al proveedor <b>"${data.nombre}"</b> del catálogo.<br><span class="text-xs text-slate-400 dark:text-slate-500">Esta acción es reversible mediante Soft Deletes.</span>`,
-                () => @this.delete(data.id)
-            );
-        });
-
-        window.addEventListener('proveedor-deleted', (event) => {
-            window.showToastSwal('¡Eliminado!', event.detail.message, 'success');
-        });
-    });
-</script>
-@endpush

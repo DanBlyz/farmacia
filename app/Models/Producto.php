@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Producto extends Model
 {
-    use HasFactory, SoftDeletes;
+    use Auditable, HasFactory, SoftDeletes;
+
     protected $table = 'productos';
 
     protected $fillable = [
@@ -25,14 +27,16 @@ class Producto extends Model
         'precio_compra',
         'precio_venta',
         'estado',
-        'deleted_at'
+        'deleted_at',
     ];
 
-    public function proveedor(){
+    public function proveedor()
+    {
         return $this->belongsTo(Proveedor::class, 'proveedor_id');
     }
 
-    public function movimientos(){
+    public function movimientos()
+    {
         return $this->hasMany(Movimiento::class);
     }
 }

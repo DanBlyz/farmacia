@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class ProductoServicio extends Model
 {
-    use HasFactory, SoftDeletes;
+    use Auditable, HasFactory, SoftDeletes;
+
     protected $table = 'producto_servicios';
 
     protected $fillable = [
@@ -22,14 +24,16 @@ class ProductoServicio extends Model
         'nandina_pri',
         'nandina_seg',
         'estado',
-        'deleted_at'
+        'deleted_at',
     ];
 
-    public function puntoVenta(){
+    public function puntoVenta()
+    {
         return $this->belongsTo('App\Models\PuntoVenta', 'punto_venta_id');
     }
 
-    public function sucursal(){
+    public function sucursal()
+    {
         return $this->belongsTo('App\Models\Sucursal', 'sucursal_id');
     }
 }

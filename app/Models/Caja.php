@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Caja extends Model
 {
-    use HasFactory, SoftDeletes;
+    use Auditable, HasFactory, SoftDeletes;
+
     protected $table = 'cajas';
 
     protected $fillable = [
@@ -30,23 +32,26 @@ class Caja extends Model
         'total_salida',
         'saldo',
         'estado',
-        'deleted_at'
+        'deleted_at',
     ];
 
-    public function usuario(){
+    public function usuario()
+    {
         return $this->belongsTo('App\Models\User', 'usuario_id');
     }
 
-    public function sacaCajaVigente($usuario_id){
-        return Caja::where('usuario_id',$usuario_id)
-                    ->where('estado', 'Abierta')
-                    ->first();
+    public function sacaCajaVigente($usuario_id)
+    {
+        return Caja::where('usuario_id', $usuario_id)
+            ->where('estado', 'Abierta')
+            ->first();
     }
 
-    public function sacarCajasRangoFechas($fechaIni, $fechafin){
+    public function sacarCajasRangoFechas($fechaIni, $fechafin)
+    {
 
-        return Caja::where('created_at','>=',$fechaIni.' 00:00:00')
-                    ->where('created_at','<=',$fechafin.' 00:00:00')
-                    ->get();
+        return Caja::where('created_at', '>=', $fechaIni.' 00:00:00')
+            ->where('created_at', '<=', $fechafin.' 00:00:00')
+            ->get();
     }
 }

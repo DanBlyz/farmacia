@@ -83,9 +83,9 @@
 
         <!-- Botón de Envío -->
         <div class="pt-2">
-            <button type="submit" class="w-full py-3.5 px-4 bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-600 hover:from-teal-500 hover:to-emerald-500 text-white font-semibold rounded-xl shadow-lg shadow-teal-500/25 hover:shadow-teal-500/40 transition-all duration-200 transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2 group text-sm tracking-wide">
+            <button type="submit" class="w-full py-3.5 px-4 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl shadow-2xs transition-colors duration-200 flex items-center justify-center gap-2 group text-sm tracking-wide cursor-pointer">
                 <span>{{ __('Iniciar Sesión en Farma') }}</span>
-                <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                <i class="fas fa-arrow-right text-xs transition-transform group-hover:translate-x-1"></i>
             </button>
         </div>
 

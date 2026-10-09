@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Rol extends Model
 {
-    use HasFactory, SoftDeletes;
+    use Auditable, HasFactory, SoftDeletes;
+
     protected $table = 'roles';
 
     protected $fillable = [
@@ -17,6 +19,6 @@ class Rol extends Model
         'usuario_eliminador_id',
         'nombre',
         'estado',
-        'deleted_at'
+        'deleted_at',
     ];
 }

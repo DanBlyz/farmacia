@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Detalle extends Model
 {
-    use HasFactory, SoftDeletes;
+    use Auditable, HasFactory, SoftDeletes;
+
     protected $table = 'detalles';
 
     protected $fillable = [
@@ -28,19 +30,21 @@ class Detalle extends Model
         'importe',
         'fecha',
         'estado',
-        'deleted_at'
+        'deleted_at',
     ];
 
-    public function factura(){
+    public function factura()
+    {
         return $this->belongsTo(Factura::class);
     }
 
-    public function producto(){
+    public function producto()
+    {
         return $this->belongsTo(Producto::class, 'producto_id');
     }
 
-    public function vendedor(){
+    public function vendedor()
+    {
         return $this->belongsTo(User::class, 'usuario_creador_id');
     }
-
 }

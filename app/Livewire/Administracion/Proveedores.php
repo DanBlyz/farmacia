@@ -3,6 +3,7 @@
 namespace App\Livewire\Administracion;
 
 use App\Models\Proveedor;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
@@ -21,11 +22,17 @@ class Proveedores extends Component
 
     // Estado del Formulario / Modal
     public bool $showModal = false;
+
     public ?int $proveedorId = null;
+
     public string $nombre = '';
+
     public string $direccion = '';
+
     public string $celular = '';
+
     public string $nit = '';
+
     public string $razon_social = '';
 
     public function updatedSearch(): void
@@ -40,12 +47,14 @@ class Proveedores extends Component
 
     public function create(): void
     {
+        abort_if(! Auth::user()->tienePermiso('administracion.proveedores.crear'), 403, 'No tiene permiso para crear proveedores.');
         $this->resetForm();
         $this->showModal = true;
     }
 
     public function edit(int $id): void
     {
+        abort_if(! Auth::user()->tienePermiso('administracion.proveedores.editar'), 403, 'No tiene permiso para editar proveedores.');
         $this->resetForm();
         $proveedor = Proveedor::findOrFail($id);
         $this->proveedorId = $proveedor->id;
@@ -59,6 +68,12 @@ class Proveedores extends Component
 
     public function save(): void
     {
+        if ($this->proveedorId) {
+            abort_if(! Auth::user()->tienePermiso('administracion.proveedores.editar'), 403, 'No tiene permiso para editar proveedores.');
+        } else {
+            abort_if(! Auth::user()->tienePermiso('administracion.proveedores.crear'), 403, 'No tiene permiso para crear proveedores.');
+        }
+
         $this->validate([
             'nombre' => 'required|string|max:150',
             'nit' => 'nullable|string|max:50',
@@ -84,7 +99,12 @@ class Proveedores extends Component
                 'razon_social' => trim($this->razon_social),
                 'usuario_modificador_id' => Auth::id(),
             ]);
-            session()->flash('message', 'Proveedor actualizado exitosamente.');
+
+            $this->dispatch('swal', [
+                'icon' => 'success',
+                'title' => '¡Operación Exitosa!',
+                'text' => 'Proveedor actualizado exitosamente.',
+            ]);
         } else {
             Proveedor::create([
                 'nombre' => trim($this->nombre),
@@ -94,7 +114,12 @@ class Proveedores extends Component
                 'razon_social' => trim($this->razon_social),
                 'usuario_creador_id' => Auth::id(),
             ]);
-            session()->flash('message', 'Proveedor registrado exitosamente.');
+
+            $this->dispatch('swal', [
+                'icon' => 'success',
+                'title' => '¡Operación Exitosa!',
+                'text' => 'Proveedor registrado exitosamente.',
+            ]);
         }
 
         $this->closeModal();
@@ -102,14 +127,19 @@ class Proveedores extends Component
 
     public function delete(int $id): void
     {
+        abort_if(! Auth::user()->tienePermiso('administracion.proveedores.eliminar'), 403, 'No tiene permiso para eliminar proveedores.');
+
         $proveedor = Proveedor::findOrFail($id);
         $proveedor->update([
             'usuario_eliminador_id' => Auth::id(),
         ]);
         $proveedor->delete();
 
-        session()->flash('message', 'Proveedor eliminado del sistema.');
-        $this->dispatch('proveedor-deleted', message: 'Proveedor eliminado del catálogo exitosamente.');
+        $this->dispatch('swal', [
+            'icon' => 'success',
+            'title' => '¡Eliminado!',
+            'text' => 'Proveedor eliminado del catálogo exitosamente.',
+        ]);
     }
 
     public function closeModal(): void
@@ -124,15 +154,15 @@ class Proveedores extends Component
         $this->resetErrorBag();
     }
 
-    public function render()
+    public function render(): View
     {
         $proveedores = Proveedor::query()
             ->when($this->search !== '', function ($query) {
                 $query->where(function ($q) {
-                    $q->where('nombre', 'like', '%' . trim($this->search) . '%')
-                        ->orWhere('nit', 'like', '%' . trim($this->search) . '%')
-                        ->orWhere('razon_social', 'like', '%' . trim($this->search) . '%')
-                        ->orWhere('celular', 'like', '%' . trim($this->search) . '%');
+                    $q->where('nombre', 'like', '%'.trim($this->search).'%')
+                        ->orWhere('nit', 'like', '%'.trim($this->search).'%')
+                        ->orWhere('razon_social', 'like', '%'.trim($this->search).'%')
+                        ->orWhere('celular', 'like', '%'.trim($this->search).'%');
                 });
             })
             ->orderBy('id', 'desc')

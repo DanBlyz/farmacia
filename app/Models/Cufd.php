@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Cufd extends Model
 {
-    use HasFactory, SoftDeletes;
+    use Auditable, HasFactory, SoftDeletes;
+
     protected $table = 'cufds';
 
     protected $fillable = [
@@ -23,6 +25,6 @@ class Cufd extends Model
         'direccion',
         'fecha_vigencia',
         'estado',
-        'deleted_at'
+        'deleted_at',
     ];
 }

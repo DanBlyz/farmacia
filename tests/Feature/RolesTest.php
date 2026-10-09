@@ -5,8 +5,16 @@ use App\Models\Rol;
 use App\Models\User;
 use Livewire\Livewire;
 
-test('authenticated users can visit the roles index page', function () {
+test('unauthorized users cannot visit the roles index page', function () {
     $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('administracion.roles'))
+        ->assertStatus(403);
+});
+
+test('authenticated users with permission can visit the roles index page', function () {
+    $user = User::factory()->admin()->create();
 
     $this->actingAs($user)
         ->get(route('administracion.roles'))
@@ -15,7 +23,7 @@ test('authenticated users can visit the roles index page', function () {
 });
 
 test('can create a new role and close modal', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->admin()->create();
 
     Livewire::actingAs($user)
         ->test(Roles::class)
@@ -32,8 +40,28 @@ test('can create a new role and close modal', function () {
     ]);
 });
 
-test('can search roles by name', function () {
+test('unauthorized users cannot create, edit or delete roles', function () {
     $user = User::factory()->create();
+    $rol = Rol::create(['nombre' => 'Rol Protegido']);
+
+    Livewire::actingAs($user)
+        ->test(Roles::class)
+        ->call('create')
+        ->assertStatus(403);
+
+    Livewire::actingAs($user)
+        ->test(Roles::class)
+        ->call('edit', $rol->id)
+        ->assertStatus(403);
+
+    Livewire::actingAs($user)
+        ->test(Roles::class)
+        ->call('delete', $rol->id)
+        ->assertStatus(403);
+});
+
+test('can search roles by name', function () {
+    $user = User::factory()->admin()->create();
 
     Rol::create(['nombre' => 'Cajero Especial']);
     Rol::create(['nombre' => 'Médico Auditor']);
@@ -46,7 +74,7 @@ test('can search roles by name', function () {
 });
 
 test('can edit an existing role', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->admin()->create();
     $rol = Rol::create(['nombre' => 'Farmacéutico Auxiliar']);
 
     Livewire::actingAs($user)
@@ -66,7 +94,7 @@ test('can edit an existing role', function () {
 });
 
 test('can soft delete a role', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->admin()->create();
     $rol = Rol::create(['nombre' => 'Personal Temporal']);
 
     Livewire::actingAs($user)

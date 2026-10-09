@@ -17,6 +17,7 @@ use App\Models\UnidadMedida;
 use App\Models\UrlApiServicio;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -24,9 +25,13 @@ use Livewire\Component;
 class Catalogos extends Component
 {
     protected $codigo_ambiente;
+
     protected $codigo_modalidad;
+
     protected $api_token;
+
     protected $codigo_sistema;
+
     protected $nit;
 
     public function boot(): void
@@ -41,16 +46,16 @@ class Catalogos extends Component
 
     private function inicializarVariables()
     {
-        $this->codigo_ambiente  = config('siat.codigo_ambiente', env('CODIGO_AMBIENTE', 2));
+        $this->codigo_ambiente = config('siat.codigo_ambiente', env('CODIGO_AMBIENTE', 2));
         $this->codigo_modalidad = config('siat.codigo_modalidad', env('CODIGO_MODALIDAD', 1));
-        $this->api_token        = config('siat.api_token', env('API_TOKEN'));
-        $this->codigo_sistema   = config('siat.codigo_sistema', env('CODIGO_SISTEMA'));
-        $this->nit              = config('siat.nit', env('NIT'));
+        $this->api_token = config('siat.api_token', env('API_TOKEN'));
+        $this->codigo_sistema = config('siat.codigo_sistema', env('CODIGO_SISTEMA'));
+        $this->nit = config('siat.nit', env('NIT'));
     }
 
     private function extractSiatMensaje($mensajesList): string
     {
-        if (!$mensajesList) {
+        if (! $mensajesList) {
             return '';
         }
         if (is_string($mensajesList)) {
@@ -68,48 +73,56 @@ class Catalogos extends Component
                     $msg[] = $m;
                 }
             }
+
             return implode(' | ', $msg);
         }
+
         return json_encode($mensajesList, JSON_UNESCAPED_UNICODE);
     }
 
-    public function sincronizar(string $tipoCatalogo)
+    public function sincronizar(string $tipoCatalogo): void
     {
+        abort_if(! Auth::user()?->tienePermiso('sincronizacion.catalogos.sincronizar'), 403, 'No tienes permiso para sincronizar catálogos del SIAT.');
+
         $this->inicializarVariables();
 
         $sucursal = Sucursal::orderBy('codigo_sucursal', 'asc')->first();
-        if (!$sucursal) {
+        if (! $sucursal) {
             $msg = 'No hay ninguna sucursal registrada en el sistema.';
             session()->flash('error', $msg);
             $this->dispatch('swal-alert', icon: 'error', title: 'Requiere Sucursal', message: $msg);
+
             return;
         }
 
         $puntoVenta0 = PuntoVenta::where('sucursal_id', $sucursal->id)->orderBy('codigo', 'asc')->first();
-        if (!$puntoVenta0) {
+        if (! $puntoVenta0) {
             $msg = 'No hay ningún punto de venta registrado en la sucursal.';
             session()->flash('error', $msg);
             $this->dispatch('swal-alert', icon: 'error', title: 'Requiere Punto de Venta', message: $msg);
+
             return;
         }
 
-        $cuis = (new Cuis())->cuisVigente($sucursal->id, $puntoVenta0->id, $this->codigo_ambiente);
-        if (!$cuis || Carbon::parse($cuis->fecha_vigencia)->lessThan(now())) {
+        $cuis = (new Cuis)->cuisVigente($sucursal->id, $puntoVenta0->id, $this->codigo_ambiente);
+        if (! $cuis || Carbon::parse($cuis->fecha_vigencia)->lessThan(now())) {
             $msg = 'No existe un CUIS vigente. Debe generar un CUIS para realizar la sincronización.';
             session()->flash('error', $msg);
             $this->dispatch('swal-alert', icon: 'error', title: 'Requiere CUIS Vigente', message: $msg);
+
             return;
         }
 
-        $urlApi = (new UrlApiServicio())->getUrlSincronizacion($this->codigo_ambiente, $this->codigo_modalidad);
-        if (!$urlApi || !$urlApi->url_servicio) {
+        $urlApi = (new UrlApiServicio)->getUrlSincronizacion($this->codigo_ambiente, $this->codigo_modalidad);
+        if (! $urlApi || ! $urlApi->url_servicio) {
             $msg = 'Error SIAT: No se encontró la URL de servicio "url_facturacion_sincronizacion" en la base de datos.';
             session()->flash('error', $msg);
             $this->dispatch('swal-alert', icon: 'error', title: 'Error Configuración SIAT', message: $msg);
+
             return;
         }
 
-        $siatController = new SiatController();
+        $siatController = new SiatController;
         $respuestaJson = '';
 
         try {
@@ -212,6 +225,7 @@ class Catalogos extends Component
                     break;
                 default:
                     $this->dispatch('swal-alert', icon: 'error', title: 'Catálogo No Válido', message: 'El tipo de catálogo enviado no es reconocido.');
+
                     return;
             }
 
@@ -221,18 +235,22 @@ class Catalogos extends Component
             if ($data && $data->estado === 'success' && $resp) {
                 if ($resp->transaccion) {
                     $lista = $resp->listaCodigos ?? [];
-                    if (!is_array($lista)) {
+                    if (! is_array($lista)) {
                         $lista = $lista ? [$lista] : [];
                     }
 
                     $count = 0;
-                    $modelClass = '\\App\\Models\\' . $tipoCatalogo;
+                    $modelClass = '\\App\\Models\\'.$tipoCatalogo;
 
                     foreach ($lista as $item) {
-                        if (!is_object($item)) continue;
+                        if (! is_object($item)) {
+                            continue;
+                        }
                         $codigo = $item->codigoClasificador ?? null;
                         $descripcion = $item->descripcion ?? null;
-                        if ($codigo === null || $descripcion === null) continue;
+                        if ($codigo === null || $descripcion === null) {
+                            continue;
+                        }
 
                         $insertData = [
                             'descripcion' => $descripcion,
@@ -257,25 +275,27 @@ class Catalogos extends Component
                     $this->dispatch('swal-alert', icon: 'success', title: '¡Catálogo Sincronizado!', message: $msgSuccess);
                 } else {
                     $mensaje = $this->extractSiatMensaje($resp->mensajesList ?? null);
-                    $msgError = 'SIAT rechazó la sincronización: ' . ($mensaje ?: 'Transacción fallida.');
+                    $msgError = 'SIAT rechazó la sincronización: '.($mensaje ?: 'Transacción fallida.');
                     session()->flash('error', $msgError);
                     $this->dispatch('swal-alert', icon: 'error', title: 'Rechazo SIAT', message: $msgError);
                 }
             } else {
                 $msg = $data->msg ?? $data->mensaje ?? 'Error de respuesta del servidor SIAT al sincronizar.';
                 $msgFormatted = is_string($msg) ? $msg : json_encode($msg, JSON_UNESCAPED_UNICODE);
-                session()->flash('error', 'Error SIAT: ' . $msgFormatted);
+                session()->flash('error', 'Error SIAT: '.$msgFormatted);
                 $this->dispatch('swal-alert', icon: 'error', title: 'Error SIAT', message: $msgFormatted);
             }
         } catch (\Exception $e) {
-            $msgException = 'Excepción al sincronizar: ' . $e->getMessage();
+            $msgException = 'Excepción al sincronizar: '.$e->getMessage();
             session()->flash('error', $msgException);
             $this->dispatch('swal-alert', icon: 'error', title: 'Excepción SIAT', message: $msgException);
         }
     }
 
-    public function render()
+    public function render(): View
     {
+        abort_if(! Auth::user()?->tienePermiso('sincronizacion.catalogos.ver'), 403, 'No tienes permiso para ver los catálogos.');
+
         return view('livewire.sincronizacion.catalogos', [
             'tipoDocumentoSector' => TipoDocumentoSector::all(),
             'tipoPuntoVenta' => TipoPuntoVenta::all(),
