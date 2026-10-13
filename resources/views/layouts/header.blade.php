@@ -54,7 +54,7 @@
         </button>
 
         <!-- Botón Alertas de Stock / Notificaciones -->
-        <div class="relative" x-data="{ openNotif: false }">
+        {{-- <div class="relative" x-data="{ openNotif: false }">
             <button @click="openNotif = !openNotif" @click.outside="openNotif = false" 
                     class="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors relative focus:outline-none"
                     title="Alertas y Notificaciones">
@@ -97,7 +97,7 @@
                     </a>
                 </div>
             </div>
-        </div>
+        </div> --}}
 
         <!-- Divisor -->
         <div class="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-1"></div>

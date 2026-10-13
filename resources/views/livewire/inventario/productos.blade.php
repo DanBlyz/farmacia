@@ -1,6 +1,6 @@
 <div>
     <x-slot name="header">
-        Catálogo de Medicamentos e Inventario
+        Catálogo de Medicamentos y Productos
     </x-slot>
 
     <!-- Notificación Flash -->
@@ -669,13 +669,32 @@
 
                                         <!-- Número de Lote -->
                                         <div>
-                                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                                                Número de Lote <span class="text-rose-500">*</span>
-                                            </label>
-                                            <input type="text" 
-                                                   wire:model="numero_lote_inicial" 
-                                                   placeholder="Ej. LOT-2026-A1" 
-                                                   class="w-full text-xs font-mono rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-500 py-2 px-3 outline-none">
+                                            <div class="flex items-center justify-between mb-1">
+                                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                                    Número de Lote <span class="text-rose-500">*</span>
+                                                </label>
+                                                <button type="button" 
+                                                        wire:click="generarCodigoLoteInicial" 
+                                                        class="text-[10px] text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1 cursor-pointer font-medium"
+                                                        title="Regenerar código correlativo de lote">
+                                                    <i class="fas fa-magic text-[9px]"></i> Autogenerar
+                                                </button>
+                                            </div>
+                                            <div class="relative">
+                                                <input type="text" 
+                                                       wire:model="numero_lote_inicial" 
+                                                       placeholder="Ej. LOT-202610-00001" 
+                                                       class="w-full text-xs font-mono rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-500 py-2 pl-3 pr-8 outline-none font-bold">
+                                                <button type="button" 
+                                                        wire:click="generarCodigoLoteInicial" 
+                                                        class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors cursor-pointer"
+                                                        title="Regenerar código">
+                                                    <i class="fas fa-sync-alt text-xs"></i>
+                                                </button>
+                                            </div>
+                                            <span class="text-[10px] text-slate-400 dark:text-slate-500 block mt-1">
+                                                Código autogenerado para evitar duplicados. Puede editarlo para registrar el lote del laboratorio.
+                                            </span>
                                             @error('numero_lote_inicial') <span class="text-rose-500 text-[11px] block mt-1">{{ $message }}</span> @enderror
                                         </div>
                                     </div>

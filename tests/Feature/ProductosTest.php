@@ -249,3 +249,21 @@ test('unauthorized users cannot create, edit or delete products', function () {
         ->call('delete', $producto->id)
         ->assertStatus(403);
 });
+
+test('automatically generates initial batch code upon create and allows manual modification', function () {
+    $user = User::factory()->admin()->create();
+
+    $component = Livewire::actingAs($user)
+        ->test(Productos::class)
+        ->call('create');
+
+    $generatedBatch = $component->get('numero_lote_inicial');
+    expect($generatedBatch)->toStartWith('LOT-');
+
+    // Cambiar manualmente el lote o regenerar
+    $component->set('numero_lote_inicial', 'LOT-FABRICANTE-999')
+        ->assertSet('numero_lote_inicial', 'LOT-FABRICANTE-999')
+        ->call('generarCodigoLoteInicial');
+
+    expect($component->get('numero_lote_inicial'))->toStartWith('LOT-');
+});

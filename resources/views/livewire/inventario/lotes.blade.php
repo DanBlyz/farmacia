@@ -1,4 +1,7 @@
 <div class="space-y-6">
+    <x-slot name="header">
+        Lotes y Vencimientos
+    </x-slot>
     <!-- 1. Tarjetas Métricas KPI de Semáforo Sanitario -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <!-- Total Lotes -->
@@ -491,15 +494,33 @@
                         @error('sucursal_id') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
                     </div>
 
-                    <!-- Número de Lote -->
                     <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                            Nº de Lote Fabricante <span class="text-rose-500">*</span>
-                        </label>
-                        <input type="text" 
-                               wire:model="numero_lote" 
-                               placeholder="Ej. LOT-2026-X01" 
-                               class="w-full py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 uppercase font-mono">
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                Nº de Lote Físico <span class="text-rose-500">*</span>
+                            </label>
+                            <button type="button" 
+                                    wire:click="generarCodigoLote" 
+                                    class="text-[10px] text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1 cursor-pointer font-medium"
+                                    title="Regenerar código automático de lote">
+                                <i class="fas fa-magic text-[9px]"></i> Autogenerar
+                            </button>
+                        </div>
+                        <div class="relative">
+                            <input type="text" 
+                                   wire:model="numero_lote" 
+                                   placeholder="Ej. LOT-202610-00001" 
+                                   class="w-full py-2 pl-3 pr-8 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 font-mono font-bold">
+                            <button type="button" 
+                                    wire:click="generarCodigoLote" 
+                                    class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors cursor-pointer"
+                                    title="Regenerar código">
+                                <i class="fas fa-sync-alt text-xs"></i>
+                            </button>
+                        </div>
+                        <span class="text-[10px] text-slate-400 dark:text-slate-500 block mt-1">
+                            Código autogenerado para prevenir errores humanos. Puede modificarlo libremente.
+                        </span>
                         @error('numero_lote') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
                     </div>
 

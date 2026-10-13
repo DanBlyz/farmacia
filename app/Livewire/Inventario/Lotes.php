@@ -103,6 +103,12 @@ class Lotes extends Component
         }
     }
 
+    public function generarCodigoLote(): void
+    {
+        $ultimoId = (int) Lote::withTrashed()->max('id') + 1;
+        $this->numero_lote = 'LOT-'.date('Ym').'-'.str_pad((string) $ultimoId, 5, '0', STR_PAD_LEFT);
+    }
+
     public function create(): void
     {
         abort_if(! Auth::user()?->tienePermiso('inventario.lotes.crear'), 403, 'No tiene permiso para dar de alta lotes.');
@@ -112,6 +118,8 @@ class Lotes extends Component
         if ($primeraSucursal) {
             $this->sucursal_id = $primeraSucursal->id;
         }
+
+        $this->generarCodigoLote();
 
         $this->showModal = true;
     }
@@ -190,6 +198,9 @@ class Lotes extends Component
                     'estado' => $this->estado,
                     'usuario_modificador_id' => Auth::id(),
                 ]);
+
+                // Sincronizar número de lote en movimientos asociados para trazabilidad
+                Movimiento::where('lote_id', $lote->id)->update(['numero_lote' => trim($this->numero_lote)]);
 
                 $msg = 'Lote actualizado correctamente.';
             } else {

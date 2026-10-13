@@ -116,6 +116,19 @@ class Productos extends Component
         $this->resetPage();
     }
 
+    public function updatedCrearLoteInicial(bool $value): void
+    {
+        if ($value && empty($this->numero_lote_inicial)) {
+            $this->generarCodigoLoteInicial();
+        }
+    }
+
+    public function generarCodigoLoteInicial(): void
+    {
+        $ultimoId = (int) Lote::withTrashed()->max('id') + 1;
+        $this->numero_lote_inicial = 'LOT-'.date('Ym').'-'.str_pad((string) $ultimoId, 5, '0', STR_PAD_LEFT);
+    }
+
     public function mount(): void
     {
         $primeraSucursal = Sucursal::orderBy('codigo_sucursal', 'asc')->first();
@@ -130,9 +143,10 @@ class Productos extends Component
 
         $this->resetForm();
 
-        // Autogenerar código correlativo de sugerencia
+        // Autogenerar código correlativo de sugerencia para producto y lote inicial
         $ultimoId = (int) Producto::withTrashed()->max('id') + 1;
         $this->codigo = 'MED-'.str_pad((string) $ultimoId, 5, '0', STR_PAD_LEFT);
+        $this->generarCodigoLoteInicial();
 
         $this->showModal = true;
     }

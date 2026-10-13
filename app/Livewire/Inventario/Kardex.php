@@ -44,11 +44,31 @@ class Kardex extends Component
 
     public ?int $nuevoLoteId = null;
 
+    public bool $esNuevoLote = false;
+
+    public string $nuevoNumeroLote = '';
+
+    public string $nuevaFechaVencimiento = '';
+
     public string $nuevoTipoMovimiento = 'AJUSTE_POSITIVO'; // 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO', 'BAJA_VENCIMIENTO'
 
     public float|string $nuevaCantidad = 1;
 
     public string $nuevoMotivo = '';
+
+    public function generarCodigoNuevoLote(): void
+    {
+        $ultimoId = (int) Lote::withTrashed()->max('id') + 1;
+        $this->nuevoNumeroLote = 'LOT-'.date('Ym').'-'.str_pad((string) $ultimoId, 5, '0', STR_PAD_LEFT);
+    }
+
+    public function cambiarModoLote(bool $esNuevo): void
+    {
+        $this->esNuevoLote = $esNuevo;
+        if ($esNuevo && empty($this->nuevoNumeroLote)) {
+            $this->generarCodigoNuevoLote();
+        }
+    }
 
     public function updatedSearch(): void
     {
@@ -119,6 +139,72 @@ class Kardex extends Component
     public function guardarAjusteKardex(): void
     {
         abort_if(! Auth::user()?->tienePermiso('inventario.kardex.crear'), 403, 'No tiene permiso para asentar ajustes en Kardex.');
+
+        if ($this->esNuevoLote) {
+            $this->validate([
+                'nuevoSucursalId' => 'required|exists:sucursales,id',
+                'nuevoProductoId' => 'required|exists:productos,id',
+                'nuevoNumeroLote' => 'required|string|max:100',
+                'nuevaFechaVencimiento' => 'required|date|after:today',
+                'nuevoTipoMovimiento' => 'required|in:AJUSTE_POSITIVO,AJUSTE_NEGATIVO,BAJA_VENCIMIENTO',
+                'nuevaCantidad' => 'required|numeric|min:0.01',
+                'nuevoMotivo' => 'required|string|min:5|max:255',
+            ], [
+                'nuevoSucursalId.required' => 'Debe seleccionar la sucursal.',
+                'nuevoProductoId.required' => 'Debe seleccionar el medicamento.',
+                'nuevoNumeroLote.required' => 'Debe ingresar o autogenerar el número de lote.',
+                'nuevaFechaVencimiento.required' => 'La fecha de vencimiento es requerida para el nuevo lote.',
+                'nuevaFechaVencimiento.after' => 'La fecha de vencimiento debe ser posterior a hoy.',
+                'nuevaCantidad.min' => 'La cantidad debe ser mayor a cero.',
+                'nuevoMotivo.required' => 'Debe fundamentar el motivo del movimiento.',
+                'nuevoMotivo.min' => 'El motivo debe ser más detallado (mínimo 5 caracteres).',
+            ]);
+
+            $prod = Producto::findOrFail($this->nuevoProductoId);
+            $cantidad = (float) $this->nuevaCantidad;
+
+            DB::transaction(function () use ($prod, $cantidad) {
+                $lote = Lote::create([
+                    'producto_id' => $prod->id,
+                    'sucursal_id' => $this->nuevoSucursalId,
+                    'numero_lote' => trim($this->nuevoNumeroLote),
+                    'fecha_vencimiento' => $this->nuevaFechaVencimiento,
+                    'stock_actual' => $cantidad,
+                    'stock_minimo_alerta' => (float) ($prod->minimo_stock ?? 10),
+                    'precio_compra' => (float) ($prod->precio_compra ?? 0),
+                    'precio_venta' => (float) ($prod->precio_venta ?? 0),
+                    'ubicacion_estante' => $prod->ubicacion_estante ? trim($prod->ubicacion_estante) : null,
+                    'estado' => 'ACTIVO',
+                    'usuario_creador_id' => Auth::id(),
+                    'usuario_modificador_id' => Auth::id(),
+                ]);
+
+                Movimiento::create([
+                    'producto_id' => $prod->id,
+                    'sucursal_id' => $this->nuevoSucursalId,
+                    'lote_id' => $lote->id,
+                    'tipo_movimiento' => $this->nuevoTipoMovimiento,
+                    'ingreso' => $cantidad,
+                    'salida' => 0,
+                    'saldo_stock' => $cantidad,
+                    'numero_lote' => $lote->numero_lote,
+                    'fecha_caducidad' => $lote->fecha_vencimiento,
+                    'fecha' => now(),
+                    'descripcion' => trim($this->nuevoMotivo),
+                    'precio_compra' => (float) $prod->precio_compra,
+                    'precio_venta' => (float) $prod->precio_venta,
+                    'estado' => 'ACTIVO',
+                    'usuario_creador_id' => Auth::id(),
+                ]);
+
+                $this->closeModal();
+                $msg = 'Nuevo lote registrado e ingreso asentado en Kardex con éxito.';
+                session()->flash('message', $msg);
+                $this->dispatch('swal-alert', icon: 'success', title: '¡Kardex Asentado!', message: $msg);
+            });
+
+            return;
+        }
 
         $this->validate([
             'nuevoSucursalId' => 'required|exists:sucursales,id',
@@ -206,6 +292,18 @@ class Kardex extends Component
             $this->nuevoProductoId = $producto->id;
             $this->nuevoLoteId = null;
             $this->productoSearch = '';
+
+            // Verificar si hay lotes en la sucursal seleccionada
+            $tieneLotes = Lote::where('producto_id', $producto->id)
+                ->where('sucursal_id', $this->nuevoSucursalId)
+                ->exists();
+
+            if (! $tieneLotes) {
+                $this->esNuevoLote = true;
+                $this->generarCodigoNuevoLote();
+            } else {
+                $this->esNuevoLote = false;
+            }
         }
     }
 
@@ -213,6 +311,7 @@ class Kardex extends Component
     {
         $this->nuevoProductoId = null;
         $this->nuevoLoteId = null;
+        $this->esNuevoLote = false;
         $this->productoSearch = '';
     }
 
@@ -228,6 +327,9 @@ class Kardex extends Component
             'nuevoProductoId',
             'productoSearch',
             'nuevoLoteId',
+            'esNuevoLote',
+            'nuevoNumeroLote',
+            'nuevaFechaVencimiento',
             'nuevoTipoMovimiento',
             'nuevaCantidad',
             'nuevoMotivo',

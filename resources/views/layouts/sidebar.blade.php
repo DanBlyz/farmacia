@@ -27,8 +27,8 @@
                 </svg>
             </div>
             <div :class="{'hidden': !sidebarOpen && !mobileOpen, 'block': sidebarOpen || mobileOpen}" class="transition-opacity duration-200 whitespace-nowrap">
-                <span class="text-lg tracking-tight font-extrabold text-white">FARMA</span>
-                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 ml-1 border border-teal-500/30">v13</span>
+                <span class="text-lg tracking-tight font-extrabold text-white">KERIGMA</span>
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 ml-1 border border-teal-500/30">v1</span>
             </div>
         </a>
 
@@ -259,10 +259,10 @@
     <!-- Footer del Sidebar (Información de Estado) -->
     <div :class="{'px-4 py-3': sidebarOpen || mobileOpen, 'p-2 justify-center': !sidebarOpen && !mobileOpen}" 
          class="border-t border-slate-800/80 bg-slate-950/60 shrink-0 flex items-center justify-between text-xs text-slate-500">
-        <div :class="{'hidden': !sidebarOpen && !mobileOpen, 'flex': sidebarOpen || mobileOpen}" class="items-center gap-2">
+        {{-- <div :class="{'hidden': !sidebarOpen && !mobileOpen, 'flex': sidebarOpen || mobileOpen}" class="items-center gap-2">
             <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
             <span class="font-medium text-slate-400">SIAT Activo</span>
         </div>
-        <span class="font-mono text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">PHP 8.3</span>
+        <span class="font-mono text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">PHP 8.3</span> --}}
     </div>
 </aside>

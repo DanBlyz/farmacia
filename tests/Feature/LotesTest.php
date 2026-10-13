@@ -2,6 +2,7 @@
 
 use App\Livewire\Inventario\Lotes;
 use App\Models\Lote;
+use App\Models\Movimiento;
 use App\Models\Producto;
 use App\Models\Sucursal;
 use App\Models\User;
@@ -256,4 +257,61 @@ test('can search and select product dynamically in lotes modal', function () {
         ->assertSee('MED-AZI-001')
         ->call('limpiarProducto')
         ->assertSet('producto_id', null);
+});
+
+test('automatically generates batch number upon create, can be regenerated or modified', function () {
+    $user = User::factory()->admin()->create();
+
+    $component = Livewire::actingAs($user)
+        ->test(Lotes::class)
+        ->call('create');
+
+    $generatedBatch = $component->get('numero_lote');
+    expect($generatedBatch)->toStartWith('LOT-');
+
+    // Cambiar manualmente el lote
+    $component->set('numero_lote', 'LOT-CUSTOM-1234')
+        ->assertSet('numero_lote', 'LOT-CUSTOM-1234')
+        ->call('generarCodigoLote');
+
+    expect($component->get('numero_lote'))->toStartWith('LOT-');
+});
+
+test('can update batch number and updates associated movements', function () {
+    $user = User::factory()->admin()->create();
+    $lote = Lote::factory()->create([
+        'numero_lote' => 'LOT-VIEJO-001',
+    ]);
+
+    Movimiento::create([
+        'producto_id' => $lote->producto_id,
+        'sucursal_id' => $lote->sucursal_id,
+        'lote_id' => $lote->id,
+        'tipo_movimiento' => 'INGRESO_INICIAL',
+        'ingreso' => 10,
+        'salida' => 0,
+        'saldo_stock' => 10,
+        'numero_lote' => 'LOT-VIEJO-001',
+        'fecha_caducidad' => $lote->fecha_vencimiento,
+        'fecha' => now(),
+        'descripcion' => 'Ingreso inicial',
+        'precio_compra' => 10,
+        'precio_venta' => 15,
+        'estado' => 'ACTIVO',
+        'usuario_creador_id' => $user->id,
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(Lotes::class)
+        ->call('edit', $lote->id)
+        ->set('numero_lote', 'LOT-CORREGIDO-002')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($lote->fresh()->numero_lote)->toBe('LOT-CORREGIDO-002');
+
+    $this->assertDatabaseHas('movimientos', [
+        'lote_id' => $lote->id,
+        'numero_lote' => 'LOT-CORREGIDO-002',
+    ]);
 });

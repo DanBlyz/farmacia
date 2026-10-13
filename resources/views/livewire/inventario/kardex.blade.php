@@ -1,4 +1,7 @@
 <div class="space-y-6">
+    <x-slot name="header">
+        Kardex de Movimientos
+    </x-slot>
     <!-- 1. Tarjetas Métricas KPI -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <!-- Total Movimientos -->
@@ -461,22 +464,77 @@
                     @error('nuevoProductoId') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
                 </div>
 
-                <!-- Lote Específico -->
-                <div>
-                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        Lote Físico Intervenido <span class="text-rose-500">*</span>
-                    </label>
-                    <select wire:model="nuevoLoteId" 
-                            {{ empty($lotesDisponibles) || $lotesDisponibles->isEmpty() ? 'disabled' : '' }}
-                            class="w-full py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 disabled:opacity-50 disabled:cursor-not-allowed">
-                        <option value="">{{ $nuevoProductoId ? ($lotesDisponibles->isEmpty() ? 'Sin lotes en esta sucursal' : 'Seleccione el lote...') : 'Primero elija un medicamento' }}</option>
-                        @foreach($lotesDisponibles as $lot)
-                            <option value="{{ $lot->id }}">
-                                Lote: {{ $lot->numero_lote }} | Vence: {{ \Carbon\Carbon::parse($lot->fecha_vencimiento)->format('d/m/Y') }} | Stock: {{ number_format($lot->stock_actual, 0) }}
-                            </option>
-                        @endforeach
-                    </select>
-                    @error('nuevoLoteId') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+                <!-- Lote Específico o Nuevo Lote -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                            Lote Físico Intervenido <span class="text-rose-500">*</span>
+                        </label>
+                        <div class="inline-flex p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs">
+                            <button type="button" 
+                                    wire:click="cambiarModoLote(false)"
+                                    class="px-2.5 py-1 rounded-md font-medium transition-colors {{ !$esNuevoLote ? 'bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700' }}">
+                                <i class="fas fa-boxes mr-1"></i> Lote Existente
+                            </button>
+                            <button type="button" 
+                                    wire:click="cambiarModoLote(true)"
+                                    class="px-2.5 py-1 rounded-md font-medium transition-colors {{ $esNuevoLote ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700' }}">
+                                <i class="fas fa-plus-circle mr-1"></i> Nuevo Lote
+                            </button>
+                        </div>
+                    </div>
+
+                    @if(!$esNuevoLote)
+                        <div>
+                            <select wire:model="nuevoLoteId" 
+                                    {{ empty($lotesDisponibles) || $lotesDisponibles->isEmpty() ? 'disabled' : '' }}
+                                    class="w-full py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <option value="">{{ $nuevoProductoId ? ($lotesDisponibles->isEmpty() ? 'Sin lotes en esta sucursal (Utilice "Nuevo Lote")' : 'Seleccione el lote...') : 'Primero elija un medicamento' }}</option>
+                                @foreach($lotesDisponibles as $lot)
+                                    <option value="{{ $lot->id }}">
+                                        Lote: {{ $lot->numero_lote }} | Vence: {{ \Carbon\Carbon::parse($lot->fecha_vencimiento)->format('d/m/Y') }} | Stock: {{ number_format($lot->stock_actual, 0) }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('nuevoLoteId') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+                        </div>
+                    @else
+                        <div class="p-3 bg-teal-50/50 dark:bg-teal-950/20 rounded-xl border border-teal-200 dark:border-teal-800/40 space-y-3">
+                            <div>
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">Código de Lote (Editable)</span>
+                                    <button type="button" 
+                                            wire:click="generarCodigoNuevoLote"
+                                            class="text-xs font-semibold text-teal-600 dark:text-teal-400 hover:text-teal-700 inline-flex items-center gap-1 transition-colors">
+                                        <i class="fas fa-sync-alt text-[10px]"></i> Autogenerar
+                                    </button>
+                                </div>
+                                <div class="relative">
+                                    <input type="text" 
+                                           wire:model="nuevoNumeroLote" 
+                                           placeholder="Ej: LOT-202610-00001"
+                                           class="w-full py-2 pl-3 pr-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
+                                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-teal-500 text-xs">
+                                        <i class="fas fa-barcode"></i>
+                                    </div>
+                                </div>
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+                                    Código correlativo autogenerado. Puede modificarlo según el lote impreso en el empaque.
+                                </p>
+                                @error('nuevoNumeroLote') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                    Fecha de Vencimiento <span class="text-rose-500">*</span>
+                                </label>
+                                <input type="date" 
+                                       wire:model="nuevaFechaVencimiento"
+                                       class="w-full py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
+                                @error('nuevaFechaVencimiento') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+                            </div>
+                        </div>
+                    @endif
                 </div>
 
                 <!-- Tipo de Movimiento -->

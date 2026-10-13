@@ -6,6 +6,7 @@ use App\Models\Movimiento;
 use App\Models\Producto;
 use App\Models\Sucursal;
 use App\Models\User;
+use Carbon\Carbon;
 use Livewire\Livewire;
 
 test('unauthorized users cannot visit the kardex index page', function () {
@@ -173,4 +174,45 @@ test('can search and select product dynamically in kardex adjustment modal', fun
         ->assertSee('MED-CLO-002')
         ->call('limpiarProducto')
         ->assertSet('nuevoProductoId', null);
+});
+
+test('can record adjustment creating a new batch with auto-generated code in kardex', function () {
+    $user = User::factory()->admin()->create();
+    $sucursal = Sucursal::factory()->create();
+    $producto = Producto::factory()->create([
+        'precio_compra' => 15.00,
+        'precio_venta' => 25.00,
+    ]);
+
+    $fechaVencimiento = Carbon::now()->addMonths(12)->format('Y-m-d');
+
+    Livewire::actingAs($user)
+        ->test(Kardex::class)
+        ->call('abrirModalAjuste')
+        ->set('nuevoSucursalId', $sucursal->id)
+        ->call('seleccionarProducto', $producto->id)
+        ->assertSet('esNuevoLote', true) // Automático porque no tenía lotes en esta sucursal
+        ->call('cambiarModoLote', true)
+        ->call('generarCodigoNuevoLote')
+        ->set('nuevoNumeroLote', 'LOT-KARDEX-AUTO-01')
+        ->set('nuevaFechaVencimiento', $fechaVencimiento)
+        ->set('nuevoTipoMovimiento', 'AJUSTE_POSITIVO')
+        ->set('nuevaCantidad', 30)
+        ->set('nuevoMotivo', 'Ingreso extraordinario por inventario inicial de sucursal')
+        ->call('guardarAjusteKardex')
+        ->assertSet('showModal', false)
+        ->assertHasNoErrors();
+
+    $lote = Lote::where('numero_lote', 'LOT-KARDEX-AUTO-01')->first();
+    expect($lote)->not->toBeNull()
+        ->and((float) $lote->stock_actual)->toBe(30.0)
+        ->and($lote->sucursal_id)->toBe($sucursal->id);
+
+    $this->assertDatabaseHas('movimientos', [
+        'lote_id' => $lote->id,
+        'tipo_movimiento' => 'AJUSTE_POSITIVO',
+        'ingreso' => 30,
+        'saldo_stock' => 30,
+        'numero_lote' => 'LOT-KARDEX-AUTO-01',
+    ]);
 });
