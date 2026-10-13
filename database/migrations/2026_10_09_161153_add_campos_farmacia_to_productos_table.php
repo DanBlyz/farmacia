@@ -14,7 +14,6 @@ return new class extends Migration
         Schema::table('productos', function (Blueprint $table) {
             $table->string('codigo_barras', 100)->nullable()->index()->after('codigo');
             $table->string('principio_activo', 255)->nullable()->after('nombre');
-            $table->string('laboratorio', 150)->nullable()->after('proveedor_id');
             $table->string('presentacion', 100)->nullable()->after('unidad');
             $table->text('accion_terapeutica')->nullable()->after('composicion');
             $table->boolean('requiere_receta')->default(false)->after('estado');

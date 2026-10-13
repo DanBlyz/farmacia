@@ -35,7 +35,6 @@ class ProductoFactory extends Factory
             'principio_activo' => $med['principio_activo'],
             'codigo' => 'MED-'.fake()->unique()->numerify('####'),
             'codigo_barras' => fake()->unique()->numerify('775##########'),
-            'laboratorio' => fake()->randomElement($laboratorios),
             'gramaje' => $med['gramaje'],
             'unidad' => 'Caja',
             'presentacion' => $med['presentacion'],

@@ -6,6 +6,9 @@ use App\Livewire\Administracion\Proveedores;
 use App\Livewire\Administracion\Roles;
 use App\Livewire\Administracion\Sucursales;
 use App\Livewire\Administracion\Usuarios;
+use App\Livewire\Inventario\Kardex;
+use App\Livewire\Inventario\Lotes;
+use App\Livewire\Inventario\Productos;
 use App\Livewire\Sincronizacion\Catalogos;
 use App\Livewire\Sincronizacion\EventosSignificativos;
 use Illuminate\Support\Facades\Route;
@@ -35,6 +38,12 @@ Route::middleware('auth')->group(function () {
     Route::prefix('sincronizacion')->as('sincronizacion.')->group(function () {
         Route::get('/catalogos', Catalogos::class)->middleware('permiso:sincronizacion.catalogos.ver')->name('catalogos');
         Route::get('/eventos-significativos', EventosSignificativos::class)->middleware('permiso:sincronizacion.eventos.ver')->name('eventos');
+    });
+
+    Route::prefix('inventario')->as('inventario.')->group(function () {
+        Route::get('/productos', Productos::class)->middleware('permiso:inventario.productos.ver')->name('productos');
+        Route::get('/lotes', Lotes::class)->middleware('permiso:inventario.lotes.ver')->name('lotes');
+        Route::get('/kardex', Kardex::class)->middleware('permiso:inventario.kardex.ver')->name('kardex');
     });
 });
 

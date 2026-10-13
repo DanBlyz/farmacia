@@ -39,7 +39,7 @@
     </div>
 
     <!-- Panel de Usuario y Sucursal -->
-    <div :class="{'px-4 py-3.5': sidebarOpen || mobileOpen, 'p-2 justify-center': !sidebarOpen && !mobileOpen}" 
+    {{-- <div :class="{'px-4 py-3.5': sidebarOpen || mobileOpen, 'p-2 justify-center': !sidebarOpen && !mobileOpen}" 
          class="border-b border-slate-800/80 bg-slate-900/50 shrink-0 flex items-center gap-3 overflow-hidden">
         <div class="relative shrink-0">
             <div class="w-10 h-10 rounded-full bg-teal-600 flex items-center justify-center text-white font-bold text-sm ring-2 ring-slate-800">
@@ -54,7 +54,7 @@
                 <span class="truncate">Sucursal Principal</span>
             </div>
         </div>
-    </div>
+    </div> --}}
 
     <!-- Contenedor del Menú con Scroll -->
     <div class="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-6 custom-scrollbar">
@@ -164,7 +164,8 @@
         @endanypermiso
 
         <!-- SECCIÓN: INVENTARIO & KARDEX -->
-        <div class="space-y-1" x-data="{ open: false }">
+        @anypermiso(['inventario.productos.ver', 'inventario.lotes.ver', 'inventario.kardex.ver'])
+        <div class="space-y-1" x-data="{ open: {{ request()->routeIs('inventario.*') ? 'true' : 'false' }} }">
             <p :class="{'hidden': !sidebarOpen && !mobileOpen, 'block': sidebarOpen || mobileOpen}" 
                class="px-3 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
                 Almacén & Inventario
@@ -173,7 +174,7 @@
             <!-- Grupo Desplegable -->
             <button @click="open = !open" 
                     :class="{'px-3': sidebarOpen || mobileOpen, 'justify-center px-0': !sidebarOpen && !mobileOpen}"
-                    class="w-full flex items-center justify-between py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:bg-slate-800/80 hover:text-white transition-all duration-150"
+                    class="w-full flex items-center justify-between py-2.5 rounded-xl text-sm font-medium {{ request()->routeIs('inventario.*') ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-800/80 hover:text-white' }} transition-all duration-150 cursor-pointer"
                     title="Inventario">
                 <div class="flex items-center gap-3 truncate">
                     <svg class="w-5 h-5 text-teal-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
@@ -184,20 +185,24 @@
 
             <!-- Submenú -->
             <div x-show="open" x-collapse x-cloak :class="{'hidden': !sidebarOpen && !mobileOpen}" class="pl-9 pr-2 py-1 space-y-1 border-l border-slate-800 ml-5 text-xs">
-                <a href="#" class="block py-2 px-3 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors truncate">
+                @permiso('inventario.productos.ver')
+                <a href="{{ route('inventario.productos') }}" wire:navigate class="block py-2 px-3 rounded-lg {{ request()->routeIs('inventario.productos') ? 'bg-teal-600 text-white font-semibold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition-colors truncate">
                     Catálogo de Medicamentos
                 </a>
-                <a href="#" class="block py-2 px-3 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors truncate">
+                @endpermiso
+                @permiso('inventario.lotes.ver')
+                <a href="{{ route('inventario.lotes') }}" wire:navigate class="block py-2 px-3 rounded-lg {{ request()->routeIs('inventario.lotes') ? 'bg-teal-600 text-white font-semibold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition-colors truncate">
                     Lotes & Vencimientos
                 </a>
-                <a href="#" class="block py-2 px-3 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors truncate">
+                @endpermiso
+                @permiso('inventario.kardex.ver')
+                <a href="{{ route('inventario.kardex') }}" wire:navigate class="block py-2 px-3 rounded-lg {{ request()->routeIs('inventario.kardex') ? 'bg-teal-600 text-white font-semibold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition-colors truncate">
                     Kardex de Movimientos
                 </a>
-                <a href="#" class="block py-2 px-3 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors truncate">
-                    Categorías y Laboratorios
-                </a>
+                @endpermiso
             </div>
         </div>
+        @endanypermiso
 
         <!-- SECCIÓN: VENTAS & POS -->
         <div class="space-y-1" x-data="{ open: false }">

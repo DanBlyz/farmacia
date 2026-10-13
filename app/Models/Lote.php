@@ -151,6 +151,14 @@ class Lote extends Model
     }
 
     /**
+     * Alias de compatibilidad semántica para esProximoAVencer.
+     */
+    public function estaProximoAVencer(int $dias = 60): bool
+    {
+        return $this->esProximoAVencer($dias);
+    }
+
+    /**
      * Semaforización farmacéutica: 'rojo', 'naranja', 'verde'.
      */
     public function getEstadoSemaforoAttribute(): string

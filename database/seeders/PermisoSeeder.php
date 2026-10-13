@@ -173,12 +173,30 @@ class PermisoSeeder extends Seeder
                 'descripcion' => 'Registrar nuevos lotes de compra/ingreso',
             ],
             [
+                'nombre' => 'inventario.lotes.editar',
+                'descripcion' => 'Modificar datos de lotes y precios por lote',
+            ],
+            [
                 'nombre' => 'inventario.lotes.ajustar',
                 'descripcion' => 'Ajustar existencias o transferir lotes entre sucursales',
             ],
             [
                 'nombre' => 'inventario.lotes.bloquear',
                 'descripcion' => 'Bloquear lotes por alerta sanitaria o caducidad',
+            ],
+            [
+                'nombre' => 'inventario.lotes.eliminar',
+                'descripcion' => 'Eliminar o dar de baja lotes físicamente',
+            ],
+
+            // Apartado Kardex de Movimientos
+            [
+                'nombre' => 'inventario.kardex.ver',
+                'descripcion' => 'Consultar historial y kardex físico valorado de movimientos',
+            ],
+            [
+                'nombre' => 'inventario.kardex.crear',
+                'descripcion' => 'Registrar ajustes manuales de inventario y regularizaciones',
             ],
 
             // ==========================================

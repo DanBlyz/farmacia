@@ -24,7 +24,6 @@ class Producto extends Model
         'codigo',
         'codigo_barras',
         'principio_activo',
-        'laboratorio',
         'gramaje',
         'unidad',
         'presentacion',
