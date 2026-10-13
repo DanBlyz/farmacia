@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\UrlApiServicio;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class UrlServicioSeeder extends Seeder
@@ -17,25 +16,25 @@ class UrlServicioSeeder extends Seeder
             'nombre' => 'url_facturacionSincronizacion',
             'url_servicio' => 'https://pilotosiatservicios.impuestos.gob.bo/v2/FacturacionSincronizacion?wsdl',
             'ambiente' => 2,
-            'modalidad' => 2
+            'modalidad' => 2,
         ]);
         UrlApiServicio::create([
             'nombre' => 'url_facturacionCodigos',
             'url_servicio' => 'https://pilotosiatservicios.impuestos.gob.bo/v2/FacturacionCodigos?wsdl',
             'ambiente' => 2,
-            'modalidad' => 2
+            'modalidad' => 2,
         ]);
         UrlApiServicio::create([
             'nombre' => 'url_servicio_facturacion_compra_venta',
             'url_servicio' => 'https://pilotosiatservicios.impuestos.gob.bo/v2/ServicioFacturacionCompraVenta?wsdl',
             'ambiente' => 2,
-            'modalidad' => 2
+            'modalidad' => 2,
         ]);
         UrlApiServicio::create([
             'nombre' => 'url_facturacion_operaciones',
             'url_servicio' => 'https://pilotosiatservicios.impuestos.gob.bo/v2/FacturacionOperaciones?wsdl',
             'ambiente' => 2,
-            'modalidad' => 2
+            'modalidad' => 2,
         ]);
     }
 }

@@ -195,6 +195,28 @@
                     }
                 });
             };
+
+            window.abrirTicketPdf = function(url) {
+                const width = 440;
+                const height = 680;
+                const left = Math.max(0, (window.screen.width - width) / 2);
+                const top = Math.max(0, (window.screen.height - height) / 2);
+                const popup = window.open(
+                    url,
+                    'ImpresionTicketFiscal',
+                    `width=${width},height=${height},top=${top},left=${left},status=no,toolbar=no,menubar=no,location=no,resizable=yes,scrollbars=yes`
+                );
+                if (popup) {
+                    popup.focus();
+                }
+            };
+
+            window.addEventListener('abrir-ticket-flotante', function(event) {
+                const url = event.detail?.url || event.detail?.[0]?.url;
+                if (url) {
+                    window.abrirTicketPdf(url);
+                }
+            });
         </script>
         @stack('scripts')
     </body>

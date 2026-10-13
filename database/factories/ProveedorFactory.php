@@ -17,7 +17,7 @@ class ProveedorFactory extends Factory
             'direccion' => $this->faker->streetAddress(),
             'celular' => $this->faker->phoneNumber(),
             'nit' => $this->faker->unique()->numberBetween(10000000, 99999999),
-            'razon_social' => 'Laboratorio ' . $this->faker->company(),
+            'razon_social' => 'Laboratorio '.$this->faker->company(),
             'usuario_creador_id' => User::factory(),
         ];
     }

@@ -5,6 +5,7 @@ namespace App\Livewire\Inventario;
 use App\Models\Lote;
 use App\Models\Movimiento;
 use App\Models\Producto;
+use App\Models\ProductoServicio;
 use App\Models\Proveedor;
 use App\Models\Sucursal;
 use App\Models\UnidadMedida;
@@ -71,6 +72,10 @@ class Productos extends Component
 
     public ?int $unidad_medida_sin = null;
 
+    public string $productoSinSearch = '';
+
+    public string $unidadSinSearch = '';
+
     public bool $requiere_receta = false;
 
     public string $estado = 'ACTIVO';
@@ -126,7 +131,31 @@ class Productos extends Component
     public function generarCodigoLoteInicial(): void
     {
         $ultimoId = (int) Lote::withTrashed()->max('id') + 1;
-        $this->numero_lote_inicial = 'LOT-'.date('Ym').'-'.str_pad((string) $ultimoId, 5, '0', STR_PAD_LEFT);
+        $this->numero_lote_inicial = 'LOT-' . date('Ym') . '-' . str_pad((string) $ultimoId, 5, '0', STR_PAD_LEFT);
+    }
+
+    public function seleccionarProductoSin(string $codigoProducto): void
+    {
+        $this->codigo_producto_sin = trim($codigoProducto);
+        $this->productoSinSearch = '';
+    }
+
+    public function deseleccionarProductoSin(): void
+    {
+        $this->codigo_producto_sin = '';
+        $this->productoSinSearch = '';
+    }
+
+    public function seleccionarUnidadSin(int|string $codigoClasificador): void
+    {
+        $this->unidad_medida_sin = (int) $codigoClasificador;
+        $this->unidadSinSearch = '';
+    }
+
+    public function deseleccionarUnidadSin(): void
+    {
+        $this->unidad_medida_sin = null;
+        $this->unidadSinSearch = '';
     }
 
     public function mount(): void
@@ -145,7 +174,7 @@ class Productos extends Component
 
         // Autogenerar código correlativo de sugerencia para producto y lote inicial
         $ultimoId = (int) Producto::withTrashed()->max('id') + 1;
-        $this->codigo = 'MED-'.str_pad((string) $ultimoId, 5, '0', STR_PAD_LEFT);
+        $this->codigo = 'MED-' . str_pad((string) $ultimoId, 5, '0', STR_PAD_LEFT);
         $this->generarCodigoLoteInicial();
 
         $this->showModal = true;
@@ -192,7 +221,7 @@ class Productos extends Component
 
         $this->validate([
             'nombre' => 'required|string|max:255',
-            'codigo' => 'required|string|max:50|unique:productos,codigo,'.($this->productoId ?? 'NULL').',id,deleted_at,NULL',
+            'codigo' => 'required|string|max:50|unique:productos,codigo,' . ($this->productoId ?? 'NULL') . ',id,deleted_at,NULL',
             'codigo_barras' => 'nullable|string|max:100',
             'principio_activo' => 'nullable|string|max:255',
             'proveedor_id' => 'nullable|exists:proveedores,id',
@@ -352,6 +381,8 @@ class Productos extends Component
             'precio_venta',
             'codigo_producto_sin',
             'unidad_medida_sin',
+            'productoSinSearch',
+            'unidadSinSearch',
             'requiere_receta',
             'estado',
             'crearLoteInicial',
@@ -374,7 +405,7 @@ class Productos extends Component
             ->with(['proveedor', 'lotes'])
             ->when($this->search !== '', function ($query) {
                 $query->where(function ($q) {
-                    $term = '%'.trim($this->search).'%';
+                    $term = '%' . trim($this->search) . '%';
                     $q->where('nombre', 'like', $term)
                         ->orWhere('codigo', 'like', $term)
                         ->orWhere('codigo_barras', 'like', $term)
@@ -400,13 +431,44 @@ class Productos extends Component
 
         $proveedores = Proveedor::orderBy('nombre', 'asc')->get();
         $sucursales = Sucursal::orderBy('codigo_sucursal', 'asc')->get();
-        $unidadesSin = UnidadMedida::orderBy('descripcion', 'asc')->get();
+
+        // Búsqueda interactiva de Producto/Servicio SIN
+        $productosSinBusqueda = collect();
+        if (strlen(trim($this->productoSinSearch)) >= 1) {
+            $termSin = '%' . trim($this->productoSinSearch) . '%';
+            $productosSinBusqueda = ProductoServicio::where('codigo_producto', 'like', $termSin)
+                ->orWhere('descripcion_producto', 'like', $termSin)
+                ->orWhere('codigo_actividad', 'like', $termSin)
+                ->take(15)
+                ->get();
+        }
+
+        $productoSinSeleccionado = ! empty($this->codigo_producto_sin)
+            ? ProductoServicio::where('codigo_producto', $this->codigo_producto_sin)->first()
+            : null;
+
+        // Búsqueda interactiva de Unidad de Medida SIN
+        $unidadesSinBusqueda = collect();
+        if (strlen(trim($this->unidadSinSearch)) >= 1) {
+            $termUni = '%' . trim($this->unidadSinSearch) . '%';
+            $unidadesSinBusqueda = UnidadMedida::where('codigo_clasificador', 'like', $termUni)
+                ->orWhere('descripcion', 'like', $termUni)
+                ->take(15)
+                ->get();
+        }
+
+        $unidadSinSeleccionada = $this->unidad_medida_sin !== null
+            ? UnidadMedida::where('codigo_clasificador', (string) $this->unidad_medida_sin)->first()
+            : null;
 
         return view('livewire.inventario.productos', [
             'productos' => $productos,
             'proveedores' => $proveedores,
             'sucursales' => $sucursales,
-            'unidadesSin' => $unidadesSin,
+            'productosSinBusqueda' => $productosSinBusqueda,
+            'productoSinSeleccionado' => $productoSinSeleccionado,
+            'unidadesSinBusqueda' => $unidadesSinBusqueda,
+            'unidadSinSeleccionada' => $unidadSinSeleccionada,
         ]);
     }
 }

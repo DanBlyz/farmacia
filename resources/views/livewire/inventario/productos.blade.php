@@ -226,7 +226,7 @@
                                             <i class="fas fa-times-circle text-[9px]"></i> Vencido
                                         </span>
                                     @elseif($esPorVencer)
-                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 mt-1" title="Lote {{ $loteProximo->numero_lote }} vence en {{ Carbon::parse($loteProximo->fecha_vencimiento)->diffForHumans() }}">
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 mt-1" title="Lote {{ $loteProximo->numero_lote }} vence en {{ \Carbon\Carbon::parse($loteProximo->fecha_vencimiento)->diffForHumans() }}">
                                             <i class="fas fa-exclamation-triangle text-[9px]"></i> Próx. a vencer
                                         </span>
                                     @else
@@ -609,32 +609,193 @@
                                 <strong>Homologación Fiscal:</strong> Para emitir facturas válidas en la Modalidad Computarizada en Línea, todo producto debe estar asociado al código de actividad/producto del SIN y su unidad de medida clasificada.
                             </div>
 
+                            <!-- ENTRADA 1: PRODUCTO Y SERVICIO SIN -->
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                                    Código de Producto y Servicio SIN
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                                    <span class="flex items-center gap-1.5">
+                                        <i class="fas fa-barcode text-teal-600"></i> Código de Producto y Servicio SIN
+                                    </span>
+                                    @if($codigo_producto_sin !== '')
+                                        <span class="text-[10px] text-teal-600 dark:text-teal-400 font-bold bg-teal-50 dark:bg-teal-950/40 px-1.5 py-0.5 rounded border border-teal-200 dark:border-teal-800">
+                                            Homologado
+                                        </span>
+                                    @endif
                                 </label>
-                                <input type="text" 
-                                       wire:model="codigo_producto_sin" 
-                                       placeholder="Código del catálogo SIN (ej. 85123, 85120...)" 
-                                       class="w-full text-xs font-mono rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-500 py-2 px-3 outline-none">
+
+                                @if($codigo_producto_sin !== '')
+                                    <!-- Tarjeta de Producto SIN Seleccionado -->
+                                    <div class="p-3 bg-teal-50/70 dark:bg-teal-950/40 rounded-xl border border-teal-200 dark:border-teal-800/60 flex items-center justify-between gap-3">
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-center gap-2">
+                                                <span class="font-mono text-xs font-extrabold text-teal-700 dark:text-teal-300 bg-teal-100 dark:bg-teal-900/60 px-2 py-0.5 rounded border border-teal-300 dark:border-teal-700">
+                                                    {{ $codigo_producto_sin }}
+                                                </span>
+                                                @if($productoSinSeleccionado?->codigo_actividad)
+                                                    <span class="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                                                        Actividad: {{ $productoSinSeleccionado->codigo_actividad }}
+                                                    </span>
+                                                @endif
+                                            </div>
+                                            <p class="text-xs font-bold text-slate-800 dark:text-slate-200 mt-1 truncate">
+                                                {{ $productoSinSeleccionado?->descripcion_producto ?: 'Código homologado SIN' }}
+                                            </p>
+                                        </div>
+                                        <button type="button" 
+                                                wire:click="deseleccionarProductoSin" 
+                                                class="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 font-semibold px-2.5 py-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
+                                                title="Cambiar código de producto SIN">
+                                            <i class="fas fa-times"></i> Cambiar
+                                        </button>
+                                    </div>
+                                @else
+                                    <!-- Buscador con Entrada de Texto en Tiempo Real -->
+                                    <div class="relative">
+                                        <div class="relative">
+                                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                                                <i class="fas fa-search text-xs"></i>
+                                            </div>
+                                            <input type="text" 
+                                                   wire:model.live.debounce.250ms="productoSinSearch" 
+                                                   placeholder="Escriba código o descripción (ej. 1003655, medicamento, cápsula, jarabe...)" 
+                                                   class="w-full pl-9 pr-8 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
+                                            @if($productoSinSearch !== '')
+                                                <button type="button" 
+                                                        wire:click="$set('productoSinSearch', '')" 
+                                                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer">
+                                                    <i class="fas fa-times-circle text-xs"></i>
+                                                </button>
+                                            @endif
+                                        </div>
+
+                                        <!-- Menú Desplegable con Resultados -->
+                                        @if(strlen(trim($productoSinSearch)) >= 1)
+                                            <div class="absolute z-50 left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl max-h-56 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                                                @forelse($productosSinBusqueda as $psin)
+                                                    <button type="button" 
+                                                            wire:click="seleccionarProductoSin('{{ $psin->codigo_producto }}')" 
+                                                            class="w-full p-2.5 text-left hover:bg-teal-50/60 dark:hover:bg-teal-950/30 flex items-center justify-between transition-colors cursor-pointer group">
+                                                        <div class="min-w-0 pr-2">
+                                                            <div class="flex items-center gap-2">
+                                                                <span class="font-mono text-xs font-bold text-teal-600 dark:text-teal-400">
+                                                                    {{ $psin->codigo_producto }}
+                                                                </span>
+                                                                <span class="text-[10px] text-slate-400 font-mono">
+                                                                    Act: {{ $psin->codigo_actividad }}
+                                                                </span>
+                                                            </div>
+                                                            <div class="text-xs text-slate-700 dark:text-slate-200 mt-0.5 font-medium leading-snug">
+                                                                {{ $psin->descripcion_producto }}
+                                                            </div>
+                                                        </div>
+                                                        <span class="text-[10px] text-teal-600 dark:text-teal-400 font-semibold shrink-0 group-hover:underline">
+                                                            Seleccionar &rarr;
+                                                        </span>
+                                                    </button>
+                                                @empty
+                                                    <div class="p-3 text-center text-xs text-slate-400">
+                                                        <p class="mb-1.5"><i class="fas fa-exclamation-circle mr-1"></i> No se encontraron productos SIN para "{{ $productoSinSearch }}".</p>
+                                                        <button type="button" 
+                                                                wire:click="seleccionarProductoSin('{{ $productoSinSearch }}')" 
+                                                                class="text-[11px] text-teal-600 dark:text-teal-400 hover:underline font-bold">
+                                                            Usar "{{ $productoSinSearch }}" como código manual
+                                                        </button>
+                                                    </div>
+                                                @endforelse
+                                            </div>
+                                        @endif
+                                    </div>
+                                @endif
                                 <span class="text-[11px] text-slate-400 block mt-1">
-                                    Consulte los códigos descargados en el apartado <strong class="text-teal-600">Sincronización -> Catálogos (Productos y Servicios)</strong>.
+                                    Catálogo de productos y servicios autorizados por el SIN para facturación en línea.
                                 </span>
+                                @error('codigo_producto_sin') <span class="text-rose-500 text-[11px] block mt-1">{{ $message }}</span> @enderror
                             </div>
 
+                            <!-- ENTRADA 2: UNIDAD DE MEDIDA SIN -->
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                                    Unidad de Medida Oficial SIN
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                                    <span class="flex items-center gap-1.5">
+                                        <i class="fas fa-balance-scale text-teal-600"></i> Unidad de Medida Oficial SIN
+                                    </span>
+                                    @if($unidad_medida_sin !== null && $unidad_medida_sin !== '')
+                                        <span class="text-[10px] text-teal-600 dark:text-teal-400 font-bold bg-teal-50 dark:bg-teal-950/40 px-1.5 py-0.5 rounded border border-teal-200 dark:border-teal-800">
+                                            Asignada
+                                        </span>
+                                    @endif
                                 </label>
-                                <select wire:model="unidad_medida_sin" 
-                                        class="w-full text-xs rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-teal-500 py-2 px-3 outline-none cursor-pointer">
-                                    <option value="">Seleccione Unidad de Medida Clasificada...</option>
-                                    @foreach($unidadesSin as $u)
-                                        <option value="{{ $u->codigo_clasificador }}">
-                                            {{ $u->codigo_clasificador }} - {{ $u->descripcion }}
-                                        </option>
-                                    @endforeach
-                                </select>
+
+                                @if($unidad_medida_sin !== null && $unidad_medida_sin !== '')
+                                    <!-- Tarjeta de Unidad SIN Seleccionada -->
+                                    <div class="p-3 bg-teal-50/70 dark:bg-teal-950/40 rounded-xl border border-teal-200 dark:border-teal-800/60 flex items-center justify-between gap-3">
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-center gap-2">
+                                                <span class="font-mono text-xs font-extrabold text-teal-700 dark:text-teal-300 bg-teal-100 dark:bg-teal-900/60 px-2 py-0.5 rounded border border-teal-300 dark:border-teal-700">
+                                                    Código {{ $unidad_medida_sin }}
+                                                </span>
+                                            </div>
+                                            <p class="text-xs font-bold text-slate-800 dark:text-slate-200 mt-1 truncate">
+                                                {{ $unidadSinSeleccionada?->descripcion ?: 'Unidad clasificada SIN' }}
+                                            </p>
+                                        </div>
+                                        <button type="button" 
+                                                wire:click="deseleccionarUnidadSin" 
+                                                class="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 font-semibold px-2.5 py-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
+                                                title="Cambiar unidad de medida SIN">
+                                            <i class="fas fa-times"></i> Cambiar
+                                        </button>
+                                    </div>
+                                @else
+                                    <!-- Buscador con Entrada de Texto en Tiempo Real -->
+                                    <div class="relative">
+                                        <div class="relative">
+                                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                                                <i class="fas fa-search text-xs"></i>
+                                            </div>
+                                            <input type="text" 
+                                                   wire:model.live.debounce.250ms="unidadSinSearch" 
+                                                   placeholder="Escriba código o nombre (ej. Unidad, Comprimido, Caja, Miligramo, 57...)" 
+                                                   class="w-full pl-9 pr-8 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
+                                            @if($unidadSinSearch !== '')
+                                                <button type="button" 
+                                                        wire:click="$set('unidadSinSearch', '')" 
+                                                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer">
+                                                    <i class="fas fa-times-circle text-xs"></i>
+                                                </button>
+                                            @endif
+                                        </div>
+
+                                        <!-- Menú Desplegable con Resultados -->
+                                        @if(strlen(trim($unidadSinSearch)) >= 1)
+                                            <div class="absolute z-50 left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl max-h-56 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                                                @forelse($unidadesSinBusqueda as $usin)
+                                                    <button type="button" 
+                                                            wire:click="seleccionarUnidadSin({{ $usin->codigo_clasificador }})" 
+                                                            class="w-full p-2.5 text-left hover:bg-teal-50/60 dark:hover:bg-teal-950/30 flex items-center justify-between transition-colors cursor-pointer group">
+                                                        <div class="min-w-0 pr-2">
+                                                            <span class="font-mono text-xs font-bold text-teal-600 dark:text-teal-400">
+                                                                Código {{ $usin->codigo_clasificador }}
+                                                            </span>
+                                                            <div class="text-xs text-slate-700 dark:text-slate-200 mt-0.5 font-medium leading-snug">
+                                                                {{ $usin->descripcion }}
+                                                            </div>
+                                                        </div>
+                                                        <span class="text-[10px] text-teal-600 dark:text-teal-400 font-semibold shrink-0 group-hover:underline">
+                                                            Seleccionar &rarr;
+                                                        </span>
+                                                    </button>
+                                                @empty
+                                                    <div class="p-3 text-center text-xs text-slate-400">
+                                                        <i class="fas fa-exclamation-circle mr-1"></i> No se encontraron unidades de medida que coincidan con "{{ $unidadSinSearch }}".
+                                                    </div>
+                                                @endforelse
+                                            </div>
+                                        @endif
+                                    </div>
+                                @endif
+                                <span class="text-[11px] text-slate-400 block mt-1">
+                                    Unidad de medida paramétrica oficial requerida en el XML de Facturación Computarizada.
+                                </span>
+                                @error('unidad_medida_sin') <span class="text-rose-500 text-[11px] block mt-1">{{ $message }}</span> @enderror
                             </div>
                         </div>
 
@@ -809,7 +970,7 @@
                                         {{ $lote->sucursal?->nombre }}
                                     </td>
                                     <td class="py-2.5 px-3 text-center font-mono">
-                                        {{ Carbon::parse($lote->fecha_vencimiento)->format('d/m/Y') }}
+                                        {{ \Carbon\Carbon::parse($lote->fecha_vencimiento)->format('d/m/Y') }}
                                     </td>
                                     <td class="py-2.5 px-3 text-center font-bold">
                                         {{ number_format($lote->stock_actual, 0) }}

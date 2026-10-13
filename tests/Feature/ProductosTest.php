@@ -25,7 +25,9 @@ test('authenticated users with permission can visit the productos index page', f
         ->assertSeeLivewire(Productos::class);
 });
 
+use App\Models\ProductoServicio;
 use App\Models\Proveedor;
+use App\Models\UnidadMedida;
 
 test('can search and filter products by name, composicion, accion_terapeutica and proveedor', function () {
     $user = User::factory()->admin()->create();
@@ -266,4 +268,48 @@ test('automatically generates initial batch code upon create and allows manual m
         ->call('generarCodigoLoteInicial');
 
     expect($component->get('numero_lote_inicial'))->toStartWith('LOT-');
+});
+
+test('allows interactive search and selection of producto servicio sin and unidad de medida sin', function () {
+    $user = User::factory()->admin()->create();
+
+    // Crear o asegurar registros de prueba
+    $psin = ProductoServicio::firstOrCreate(
+        ['codigo_producto' => '1003655'],
+        [
+            'codigo_actividad' => '4772100',
+            'descripcion_producto' => 'PREPARADOS FARMACEUTICOS',
+        ]
+    );
+
+    $umed = UnidadMedida::firstOrCreate(
+        ['codigo_clasificador' => '57'],
+        [
+            'descripcion' => 'UNIDAD (BIENES)',
+        ]
+    );
+
+    Livewire::actingAs($user)
+        ->test(Productos::class)
+        ->call('create')
+        ->set('modalTab', 'siat')
+        // Búsqueda interactiva de Producto SIN
+        ->set('productoSinSearch', 'farmaceuticos')
+        ->assertSee('PREPARADOS FARMACEUTICOS')
+        ->call('seleccionarProductoSin', '1003655')
+        ->assertSet('codigo_producto_sin', '1003655')
+        ->assertSet('productoSinSearch', '')
+        ->assertSee('1003655')
+        // Búsqueda interactiva de Unidad de Medida SIN
+        ->set('unidadSinSearch', 'bienes')
+        ->assertSee('UNIDAD (BIENES)')
+        ->call('seleccionarUnidadSin', 57)
+        ->assertSet('unidad_medida_sin', 57)
+        ->assertSet('unidadSinSearch', '')
+        ->assertSee('Código 57')
+        // Deselección
+        ->call('deseleccionarProductoSin')
+        ->assertSet('codigo_producto_sin', '')
+        ->call('deseleccionarUnidadSin')
+        ->assertSet('unidad_medida_sin', null);
 });

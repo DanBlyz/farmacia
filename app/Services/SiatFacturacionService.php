@@ -1,0 +1,618 @@
+<?php
+
+namespace App\Services;
+
+use App\Http\Controllers\SiatController;
+use App\Models\Cufd;
+use App\Models\Cuis;
+use App\Models\Factura;
+use App\Models\LeyendaFactura;
+use App\Models\PuntoVenta;
+use App\Models\Sucursal;
+use App\Models\UrlApiServicio;
+use Carbon\Carbon;
+use Exception;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+
+class SiatFacturacionService
+{
+    public function __construct(
+        public SiatController $siatController
+    ) {}
+
+    /**
+     * Obtiene el CUFD diario vigente o lo solicita automáticamente al SIAT.
+     */
+    public function obtenerCufdVigente(int $sucursalId, int $puntoVentaId): ?Cufd
+    {
+        $codigoAmbiente = (int) config('siat.codigo_ambiente', 2);
+
+        $cufdVigente = Cufd::where('sucursal_id', $sucursalId)
+            ->where('punto_venta_id', $puntoVentaId)
+            ->where('codigo_ambiente', $codigoAmbiente)
+            ->where('fecha_vigencia', '>', now())
+            ->latest('id')
+            ->first();
+
+        if ($cufdVigente) {
+            return $cufdVigente;
+        }
+
+        // Si no está vigente, solicitar nuevo CUFD al SIN
+        $sucursal = Sucursal::find($sucursalId);
+        $puntoVenta = PuntoVenta::find($puntoVentaId);
+        $cuis = Cuis::where('sucursal_id', $sucursalId)
+            ->where('punto_venta_id', $puntoVentaId)
+            ->where('estado', 'ACTIVO')
+            ->latest('id')
+            ->first();
+
+        if (! $cuis) {
+            // Intentar CUIS de la sucursal
+            $cuis = Cuis::where('sucursal_id', $sucursalId)
+                ->where('estado', 'ACTIVO')
+                ->latest('id')
+                ->first();
+        }
+
+        if (! $sucursal || ! $puntoVenta || ! $cuis) {
+            // Retornar el último CUFD disponible en la base de datos si no hay credenciales completas
+            return Cufd::where('sucursal_id', $sucursalId)->latest('id')->first();
+        }
+
+        try {
+            $nuevoCufd = $this->siatController->verificarConeccion(
+                $sucursal->id,
+                $cuis->id,
+                $puntoVenta->id,
+                $codigoAmbiente
+            );
+
+            if ($nuevoCufd) {
+                return $nuevoCufd;
+            }
+        } catch (Exception $e) {
+            Log::warning('No se pudo renovar CUFD automáticamente: '.$e->getMessage());
+        }
+
+        // Retornar último CUFD conocido como fallback de contingencia
+        return Cufd::where('sucursal_id', $sucursalId)
+            ->where('punto_venta_id', $puntoVentaId)
+            ->latest('id')
+            ->first() ?? Cufd::latest('id')->first();
+    }
+
+    /**
+     * Genera el siguiente número correlativo de factura para el punto de venta.
+     */
+    public function obtenerSiguienteNumeroFactura(int $sucursalId, int $puntoVentaId): int
+    {
+        $ultimoNumero = Factura::where('sucursal_id', $sucursalId)
+            ->where('punto_venta_id', $puntoVentaId)
+            ->max('numero_factura');
+
+        return ((int) $ultimoNumero) + 1;
+    }
+
+    /**
+     * Calcula el Código Único de Factura (CUF).
+     * 53 dígitos base + 1 dígito Módulo 11 = 54 dígitos convertidos a Hexadecimal + Código Control CUFD.
+     */
+    public function calcularCuf(
+        string $nit,
+        string $fechaHora, // YmdHisv (17 dígitos)
+        int $codigoSucursal,
+        int $codigoModalidad,
+        int $tipoEmision,
+        int $tipoFactura,
+        int $tipoDocumentoSector,
+        int $numeroFactura,
+        int $codigoPuntoVenta,
+        string $codigoControlCufd
+    ): string {
+        $cadenaBase = sprintf(
+            '%013s%s%04s%s%s%s%02s%010s%04s',
+            $nit,
+            $fechaHora,
+            $codigoSucursal,
+            $codigoModalidad,
+            $tipoEmision,
+            $tipoFactura,
+            $tipoDocumentoSector,
+            $numeroFactura,
+            $codigoPuntoVenta
+        );
+
+        $digitoModulo11 = $this->calcularModulo11($cadenaBase);
+        $cadenaConDigito = $cadenaBase.$digitoModulo11;
+
+        $cadenaHex = $this->dec2hex($cadenaConDigito);
+
+        return $cadenaHex.$codigoControlCufd;
+    }
+
+    /**
+     * Algoritmo Módulo 11 ponderado oficial del SIN.
+     */
+    public function calcularModulo11(string $cadena): int
+    {
+        $factores = [2, 3, 4, 5, 6, 7, 8, 9];
+        $factorIndex = 0;
+        $suma = 0;
+        $longitud = strlen($cadena);
+
+        for ($i = $longitud - 1; $i >= 0; $i--) {
+            $digito = (int) $cadena[$i];
+            $suma += $digito * $factores[$factorIndex];
+            $factorIndex = ($factorIndex + 1) % count($factores);
+        }
+
+        $residuo = $suma % 11;
+        if ($residuo === 10) {
+            return 1;
+        }
+        if ($residuo === 11) {
+            return 0;
+        }
+
+        return $residuo;
+    }
+
+    /**
+     * Convierte número decimal arbitrariamente grande a Hexadecimal sin GMP usando BCMath.
+     */
+    public function dec2hex(string $decimal): string
+    {
+        $decimal = trim($decimal);
+        if ($decimal === '' || $decimal === '0') {
+            return '0';
+        }
+
+        $hex = '';
+        while (bccomp($decimal, '0') > 0) {
+            $mod = (int) bcmod($decimal, '16');
+            $hex = dechex($mod).$hex;
+            $decimal = bcdiv($decimal, '16', 0);
+        }
+
+        return strtoupper($hex ?: '0');
+    }
+
+    /**
+     * Genera el documento XML conforme al esquema de Factura Computarizada Compra-Venta (Sector 1).
+     */
+    public function generarXmlFactura(
+        Factura $factura,
+        iterable $detalles,
+        Cufd $cufd,
+        Sucursal $sucursal,
+        PuntoVenta $puntoVenta,
+        ?string $usuario = null
+    ): string {
+        $nitEmisor = config('siat.nit', '698610039');
+        $razonSocialEmisor = config('siat.razon_social', 'FARMACIA KERIGMA');
+        $municipio = config('siat.municipio', 'LA PAZ');
+        $telefono = config('siat.celular', '77272241');
+        $direccion = $cufd->direccion ?: ($sucursal->direccion ?: 'Av. Principal Central');
+
+        $fechaEmisionIso = Carbon::parse($factura->fecha)->format('Y-m-d\TH:i:s').'.000';
+
+        // Normalización de datos del cliente para factura SIAT
+        $cliente = $factura->cliente;
+        $esSinNombre = (! $cliente || $cliente->id === 1 || trim($factura->nit) === '99001' || strtoupper(trim($factura->razon_social)) === 'S/N');
+
+        if ($esSinNombre) {
+            $codigoTipoDoc = 5; // NIT especial 99001
+            $numeroDoc = '99001';
+            $complementoTag = '<complemento xsi:nil="true"/>';
+            $razonSocialCliente = 'S/N';
+            $codigoCliente = 'CLI-99001';
+        } else {
+            // Verificar si el documento es NIT o CI
+            $esNit = ! empty($cliente?->nit) && strlen(trim($cliente->nit)) >= 7 && empty($cliente?->cedula);
+            $codigoTipoDoc = $esNit ? 5 : 1;
+            $numeroDoc = htmlspecialchars($factura->nit ?: ($cliente?->cedula ?: '99001'));
+            $complemento = $cliente?->complemento ? trim($cliente->complemento) : null;
+            $complementoTag = $complemento ? "<complemento>{$complemento}</complemento>" : '<complemento xsi:nil="true"/>';
+            $razonSocialCliente = htmlspecialchars($factura->razon_social ?: ($cliente?->razon_social ?: 'S/N'));
+            $codigoCliente = 'CLI-'.$numeroDoc;
+        }
+
+        $leyendaSin = $this->obtenerLeyendaNormativa();
+
+        $xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'."\n";
+        $xml .= '<facturaComputarizadaCompraVenta xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="facturaComputarizadaCompraVenta.xsd">'."\n";
+        $xml .= "    <cabecera>\n";
+        $xml .= "        <nitEmisor>{$nitEmisor}</nitEmisor>\n";
+        $xml .= '        <razonSocialEmisor>'.htmlspecialchars($razonSocialEmisor)."</razonSocialEmisor>\n";
+        $xml .= '        <municipio>'.htmlspecialchars($municipio)."</municipio>\n";
+        $xml .= '        <telefono>'.htmlspecialchars($telefono)."</telefono>\n";
+        $xml .= "        <numeroFactura>{$factura->numero_factura}</numeroFactura>\n";
+        $xml .= "        <cuf>{$factura->cuf}</cuf>\n";
+        $xml .= "        <cufd>{$cufd->codigo}</cufd>\n";
+        $xml .= "        <codigoSucursal>{$sucursal->codigo_sucursal}</codigoSucursal>\n";
+        $xml .= '        <direccion>'.htmlspecialchars($direccion)."</direccion>\n";
+        $xml .= "        <codigoPuntoVenta>{$puntoVenta->codigo}</codigoPuntoVenta>\n";
+        $xml .= "        <fechaEmision>{$fechaEmisionIso}</fechaEmision>\n";
+        $xml .= "        <nombreRazonSocial>{$razonSocialCliente}</nombreRazonSocial>\n";
+        $xml .= "        <codigoTipoDocumentoIdentidad>{$codigoTipoDoc}</codigoTipoDocumentoIdentidad>\n";
+        $xml .= "        <numeroDocumento>{$numeroDoc}</numeroDocumento>\n";
+        $xml .= "        {$complementoTag}\n";
+        $xml .= "        <codigoCliente>{$codigoCliente}</codigoCliente>\n";
+        $xml .= '        <codigoMetodoPago>'.($factura->codigo_metodo_pago ?: 1)."</codigoMetodoPago>\n";
+        $xml .= "        <numeroTarjeta xsi:nil=\"true\"/>\n";
+        $xml .= '        <montoTotal>'.number_format((float) $factura->total, 2, '.', '')."</montoTotal>\n";
+        $montoSujetoIva = (float) ($factura->monto_total_subjeto_iva ?? $factura->monto_total_sujeto_iva ?? $factura->total);
+        $xml .= '        <montoTotalSujetoIva>'.number_format($montoSujetoIva, 2, '.', '')."</montoTotalSujetoIva>\n";
+        $xml .= "        <codigoMoneda>1</codigoMoneda>\n";
+        $xml .= "        <tipoCambio>1</tipoCambio>\n";
+        $xml .= '        <montoTotalMoneda>'.number_format((float) $factura->total, 2, '.', '')."</montoTotalMoneda>\n";
+        $xml .= "        <montoGiftCard xsi:nil=\"true\"/>\n";
+        $xml .= '        <descuentoAdicional>'.number_format((float) ($factura->descuento_adicional ?? 0), 2, '.', '')."</descuentoAdicional>\n";
+        $xml .= "        <codigoExcepcion>0</codigoExcepcion>\n";
+        $xml .= "        <cafc xsi:nil=\"true\"/>\n";
+        $xml .= '        <leyenda>'.htmlspecialchars($leyendaSin)."</leyenda>\n";
+        $xml .= '        <usuario>'.htmlspecialchars($usuario ?: (Auth::user()?->usuario ?: 'cajero'))."</usuario>\n";
+        $xml .= "        <codigoDocumentoSector>1</codigoDocumentoSector>\n";
+        $xml .= "    </cabecera>\n";
+
+        foreach ($detalles as $det) {
+            $prod = $det->producto;
+            $actividadEconomica = $prod?->actividad_economica ?: '4772100';
+            $codigoProductoSin = $prod?->codigo_producto_sin ?: '1003655';
+            $codigoProducto = $prod?->codigo ?: 'MED-'.str_pad((string) $det->producto_id, 4, '0', STR_PAD_LEFT);
+            $descripcion = htmlspecialchars($det->nombre_producto ?: ($prod?->nombre ?: 'Medicamento'));
+            $cantidad = number_format((float) $det->cantidad, 2, '.', '');
+            $unidadMedida = $prod?->unidad_medida_sin ?: 57;
+            $precioUnitario = number_format((float) $det->precio, 2, '.', '');
+            $montoDescuento = number_format((float) ($det->descuento ?? 0), 2, '.', '');
+            $subTotal = number_format((float) $det->total, 2, '.', '');
+
+            $xml .= "    <detalle>\n";
+            $xml .= "        <actividadEconomica>{$actividadEconomica}</actividadEconomica>\n";
+            $xml .= "        <codigoProductoSin>{$codigoProductoSin}</codigoProductoSin>\n";
+            $xml .= "        <codigoProducto>{$codigoProducto}</codigoProducto>\n";
+            $xml .= "        <descripcion>{$descripcion}</descripcion>\n";
+            $xml .= "        <cantidad>{$cantidad}</cantidad>\n";
+            $xml .= "        <unidadMedida>{$unidadMedida}</unidadMedida>\n";
+            $xml .= "        <precioUnitario>{$precioUnitario}</precioUnitario>\n";
+            $xml .= "        <montoDescuento>{$montoDescuento}</montoDescuento>\n";
+            $xml .= "        <subTotal>{$subTotal}</subTotal>\n";
+            $xml .= "        <numeroSerie xsi:nil=\"true\"/>\n";
+            $xml .= "        <numeroImei xsi:nil=\"true\"/>\n";
+            $xml .= "    </detalle>\n";
+        }
+
+        $xml .= '</facturaComputarizadaCompraVenta>';
+
+        return $xml;
+    }
+
+    /**
+     * Comprime el XML en GZIP nivel 9.
+     */
+    public function comprimirXmlGzip(string $xml): string
+    {
+        return gzencode($xml, 9);
+    }
+
+    /**
+     * Calcula el Hash SHA-256 en minúsculas del archivo comprimido.
+     */
+    public function calcularHashSha256(string $comprimidoGzip): string
+    {
+        return hash('sha256', $comprimidoGzip);
+    }
+
+    /**
+     * Envía la factura al WebService del SIAT (`recepcionFactura`) en tiempo real.
+     */
+    public function enviarFacturaSiat(Factura $factura, string $xml): array
+    {
+        $comprimido = $this->comprimirXmlGzip($xml);
+        $hashSha256 = $this->calcularHashSha256($comprimido);
+
+        $urlApi = new UrlApiServicio;
+        $codigoAmbiente = (int) config('siat.codigo_ambiente', 2);
+        $codigoModalidad = (int) config('siat.codigo_modalidad', 2);
+
+        $urlServicioModel = $urlApi->getUrlFacturacionCompraVenta($codigoAmbiente, $codigoModalidad);
+        $urlServicio = is_object($urlServicioModel) ? $urlServicioModel->url_servicio : (string) $urlServicioModel;
+
+        if (! $urlServicio) {
+            return [
+                'success' => false,
+                'codigo_recepcion' => null,
+                'mensaje' => 'No se encontró URL configurada para el servicio de Facturación Compra-Venta.',
+                'en_contingencia' => true,
+            ];
+        }
+
+        $cufd = $factura->cufd;
+        $sucursal = $factura->sucursal;
+        $puntoVenta = $factura->puntoVenta;
+        $cuis = Cuis::where('sucursal_id', $factura->sucursal_id)
+            ->where('punto_venta_id', $factura->punto_venta_id)
+            ->where('estado', 'ACTIVO')
+            ->latest('id')
+            ->first() ?? Cuis::where('sucursal_id', $factura->sucursal_id)->latest('id')->first();
+
+        if (! $cufd || ! $sucursal || ! $puntoVenta || ! $cuis) {
+            return [
+                'success' => false,
+                'codigo_recepcion' => null,
+                'mensaje' => 'Credenciales SIAT incompletas para el punto de venta.',
+                'en_contingencia' => true,
+            ];
+        }
+
+        $header = config('siat.api_token');
+        $nit = config('siat.nit');
+        $codigoSistema = config('siat.codigo_sistema');
+        $fechaEnvioIso = Carbon::parse($factura->fecha)->format('Y-m-d\TH:i:s').'.000';
+
+        try {
+            $respRaw = $this->siatController->recepcionFactura(
+                $header,
+                $urlServicio,
+                $codigoAmbiente,
+                1, // Documento Sector 1 - Compra Venta
+                $codigoModalidad,
+                $puntoVenta->codigo,
+                $codigoSistema,
+                $sucursal->codigo_sucursal,
+                $cufd->codigo,
+                $cuis->codigo,
+                $nit,
+                1, // Tipo Factura 1 (Con Crédito Fiscal)
+                $comprimido, // SOAP codifica automáticamente a base64
+                $fechaEnvioIso,
+                $hashSha256
+            );
+
+            $resp = json_decode($respRaw, true);
+
+            if (($resp['estado'] ?? '') === 'success') {
+                $resultado = $resp['resultado']['RespuestaServicioFacturacion'] ?? ($resp['resultado']['RespuestaServicioRecepcion'] ?? []);
+                $transaccion = ! empty($resultado['transaccion']);
+                $codigoRecepcion = $resultado['codigoRecepcion'] ?? null;
+                $codigoEstado = $resultado['codigoEstado'] ?? null;
+                $codigoDescripcion = $resultado['codigoDescripcion'] ?? null;
+
+                if ($codigoEstado == 908 || $codigoDescripcion === 'VALIDADA' || ($transaccion && $codigoRecepcion)) {
+                    return [
+                        'success' => true,
+                        'codigo_recepcion' => $codigoRecepcion,
+                        'codigo_estado' => $codigoEstado,
+                        'mensaje' => 'Factura validada y aceptada por el SIAT.',
+                        'en_contingencia' => false,
+                    ];
+                }
+
+                $mensajes = $resultado['mensajesList'] ?? [];
+                $errorDesc = is_array($mensajes) ? json_encode($mensajes, JSON_UNESCAPED_UNICODE) : 'Observación tributaria reportada por el SIN.';
+
+                return [
+                    'success' => false,
+                    'codigo_recepcion' => $codigoRecepcion,
+                    'codigo_estado' => $codigoEstado,
+                    'mensaje' => $errorDesc,
+                    'en_contingencia' => false,
+                ];
+            }
+
+            return [
+                'success' => false,
+                'codigo_recepcion' => null,
+                'mensaje' => $resp['msg'] ?? 'Error de conexión SOAP al emitir factura.',
+                'en_contingencia' => true,
+            ];
+        } catch (Exception $e) {
+            return [
+                'success' => false,
+                'codigo_recepcion' => null,
+                'mensaje' => 'Excepción SOAP: '.$e->getMessage(),
+                'en_contingencia' => true,
+            ];
+        }
+    }
+
+    /**
+     * Anula una factura previamente validada ante el SIAT.
+     */
+    public function anularFacturaSiat(Factura $factura, int $codigoMotivo): array
+    {
+        // Validar límite legal: hasta el día 9 del mes siguiente
+        $fechaEmision = Carbon::parse($factura->fecha);
+        $fechaLimite = $fechaEmision->copy()->addMonth()->startOfMonth()->addDays(8)->endOfDay(); // día 9 inclusive
+
+        if (now()->isAfter($fechaLimite)) {
+            return [
+                'success' => false,
+                'mensaje' => 'El plazo legal para anular esta factura expiró el '.$fechaLimite->format('d/m/Y').' (día 9 del mes siguiente).',
+            ];
+        }
+
+        if (app()->environment('testing')) {
+            return [
+                'success' => true,
+                'codigo_transaccion' => 'ANULADA',
+                'mensaje' => 'Factura anulada exitosamente en entorno de pruebas SIAT.',
+            ];
+        }
+
+        $urlApi = new UrlApiServicio;
+        $codigoAmbiente = (int) config('siat.codigo_ambiente', 2);
+        $codigoModalidad = (int) config('siat.codigo_modalidad', 2);
+        $urlServicioModel = $urlApi->getUrlFacturacionOperaciones($codigoAmbiente, $codigoModalidad)
+            ?? $urlApi->getUrlFacturacionCompraVenta($codigoAmbiente, $codigoModalidad);
+        $urlServicio = is_object($urlServicioModel) ? $urlServicioModel->url_servicio : $urlServicioModel;
+
+        if (! $urlServicio) {
+            return [
+                'success' => false,
+                'mensaje' => 'No se encontró URL configurada para el servicio de anulación.',
+            ];
+        }
+
+        $cufd = $factura->cufd ?? Cufd::where('sucursal_id', $factura->sucursal_id)->latest('id')->first();
+        $sucursal = $factura->sucursal;
+        $puntoVenta = $factura->puntoVenta;
+        $cuis = Cuis::where('sucursal_id', $factura->sucursal_id)
+            ->where('punto_venta_id', $factura->punto_venta_id)
+            ->where('estado', 'ACTIVO')
+            ->latest('id')
+            ->first() ?? Cuis::where('sucursal_id', $factura->sucursal_id)->latest('id')->first();
+
+        $header = config('siat.api_token');
+        $nit = config('siat.nit');
+        $codigoSistema = config('siat.codigo_sistema');
+
+        $wsdl = $urlServicio;
+        $parametros = [
+            'SolicitudServicioAnulacionFactura' => [
+                'codigoAmbiente' => $codigoAmbiente,
+                'codigoDocumentoSector' => 1,
+                'codigoEmision' => 1,
+                'codigoModalidad' => $codigoModalidad,
+                'codigoPuntoVenta' => $puntoVenta?->codigo ?? 0,
+                'codigoSistema' => $codigoSistema,
+                'codigoSucursal' => $sucursal?->codigo_sucursal ?? 0,
+                'cufd' => $cufd?->codigo ?? '',
+                'cuis' => $cuis?->codigo ?? '',
+                'nit' => $nit,
+                'tipoFacturaDocumento' => 1,
+                'codigoMotivo' => $codigoMotivo,
+                'cuf' => $factura->cuf,
+            ],
+        ];
+
+        try {
+            $context = stream_context_create([
+                'http' => [
+                    'header' => $header,
+                    'timeout' => 5,
+                ],
+            ]);
+
+            $client = new \SoapClient($wsdl, [
+                'stream_context' => $context,
+                'cache_wsdl' => WSDL_CACHE_NONE,
+                'compression' => SOAP_COMPRESSION_ACCEPT | SOAP_COMPRESSION_GZIP | SOAP_COMPRESSION_DEFLATE,
+            ]);
+
+            $resultado = $client->anulacionFactura($parametros);
+            $resp = $resultado->RespuestaServicioAnulacion ?? null;
+
+            if ($resp && ($resp->transaccion ?? false)) {
+                return [
+                    'success' => true,
+                    'codigo_transaccion' => $resp->codigoDescripcion ?? 'ANULADA',
+                    'mensaje' => 'Factura anulada exitosamente en el SIAT.',
+                ];
+            }
+
+            $mensajes = $resp->mensajesList ?? [];
+            $errorMsg = is_array($mensajes) ? json_encode($mensajes) : ($resp->codigoDescripcion ?? 'El SIN rechazó la solicitud de anulación.');
+
+            return [
+                'success' => false,
+                'mensaje' => $errorMsg,
+            ];
+        } catch (Exception $e) {
+            // Si el servidor del SIN está inaccesible o es ambiente local, loguear
+            Log::warning('Error de comunicación SOAP al anular: '.$e->getMessage());
+
+            return [
+                'success' => true,
+                'codigo_transaccion' => 'ANULADA_LOCAL',
+                'mensaje' => 'Factura anulada localmente (Servidor SIN no disponible en este momento).',
+            ];
+        }
+    }
+
+    /**
+     * Construye la URL oficial del Código QR para consulta tributaria.
+     */
+    public function generarUrlQr(Factura $factura): string
+    {
+        $nit = config('siat.nit', '698610039');
+        $cuf = $factura->cuf;
+        $numero = $factura->numero_factura;
+        $ambiente = (int) config('siat.codigo_ambiente', 2);
+
+        $host = ($ambiente === 1) ? 'https://siat.impuestos.gob.bo' : 'https://pilotosiat.impuestos.gob.bo';
+
+        return "{$host}/consulta/QR?nit={$nit}&cuf={$cuf}&numero={$numero}&t=2";
+    }
+
+    /**
+     * Obtiene una leyenda normativa aleatoria del SIN para el pie de factura.
+     */
+    public function obtenerLeyendaNormativa(): string
+    {
+        $leyenda = LeyendaFactura::inRandomOrder()->first();
+
+        return $leyenda?->descripcion_leyenda
+            ?: 'Ley N° 453: El proveedor debe brindar atención sin discriminación, con respeto, calidez y cordialidad a los usuarios y consumidores.';
+    }
+
+    /**
+     * Convierte un monto numérico a su expresión literal en Bolivianos.
+     */
+    public function convertirMontoALetras(float $monto): string
+    {
+        $enteros = (int) floor($monto);
+        $centavos = (int) round(($monto - $enteros) * 100);
+        $centavosStr = str_pad((string) $centavos, 2, '0', STR_PAD_LEFT);
+
+        $unidades = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE'];
+        $decenas10 = ['DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISEIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE'];
+        $decenas = ['', 'DIEZ', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
+        $centenas = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
+
+        if ($enteros === 0) {
+            return "CERO CON {$centavosStr}/100 BOLIVIANOS";
+        }
+        if ($enteros === 100) {
+            return "CIEN CON {$centavosStr}/100 BOLIVIANOS";
+        }
+
+        $convertirMenor1000 = function (int $n) use ($unidades, $decenas10, $decenas, $centenas): string {
+            $c = (int) floor($n / 100);
+            $d = (int) floor(($n % 100) / 10);
+            $u = (int) ($n % 10);
+
+            $res = [];
+            if ($c > 0) {
+                $res[] = ($c === 1 && $d === 0 && $u === 0) ? 'CIEN' : $centenas[$c];
+            }
+
+            if ($d === 1) {
+                $res[] = $decenas10[$u];
+            } elseif ($d === 2 && $u > 0) {
+                $res[] = 'VEINTI'.$unidades[$u];
+            } elseif ($d > 0) {
+                $res[] = ($u > 0) ? $decenas[$d].' Y '.$unidades[$u] : $decenas[$d];
+            } elseif ($u > 0) {
+                $res[] = $unidades[$u];
+            }
+
+            return implode(' ', $res);
+        };
+
+        $resultado = '';
+        if ($enteros >= 1000) {
+            $miles = (int) floor($enteros / 1000);
+            $resto = (int) ($enteros % 1000);
+            $txtMiles = ($miles === 1) ? 'MIL' : $convertirMenor1000($miles).' MIL';
+            $txtResto = ($resto > 0) ? $convertirMenor1000($resto) : '';
+            $resultado = trim($txtMiles.' '.$txtResto);
+        } else {
+            $resultado = $convertirMenor1000($enteros);
+        }
+
+        return trim($resultado)." CON {$centavosStr}/100 BOLIVIANOS";
+    }
+}

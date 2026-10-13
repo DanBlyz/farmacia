@@ -40,6 +40,11 @@ class Pago extends Model
         return $this->belongsTo('App\Models\PuntoVenta', 'punto_venta_id');
     }
 
+    public function caja()
+    {
+        return $this->belongsTo('App\Models\Caja', 'caja_id');
+    }
+
     public function usuario()
     {
         return $this->belongsTo('App\Models\User', 'usuario_creador_id');

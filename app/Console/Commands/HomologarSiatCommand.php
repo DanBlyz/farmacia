@@ -13,9 +13,9 @@ class HomologarSiatCommand extends Command
      * @var string
      */
     protected $signature = 'siat:homologar 
-                            {etapa : Etapa a ejecutar (catalogos | cufd)} 
+                            {etapa : Etapa a ejecutar (catalogos | cufd | emision)} 
                             {--pv= : Filtrar por punto de venta (0 o 1)} 
-                            {--repeticiones= : Cantidad de repeticiones por registro (por defecto 50 en catálogos, 100 en cufd)} 
+                            {--repeticiones= : Cantidad de repeticiones por registro (por defecto 50 en catálogos, 100 en cufd, 125 en emision)} 
                             {--metodo= : Método SOAP específico para la etapa de catálogos}';
 
     /**
@@ -48,7 +48,11 @@ class HomologarSiatCommand extends Command
             return $this->ejecutarCufd($servicio, $pv, $repeticiones ?? 100);
         }
 
-        $this->error("Etapa '{$etapa}' no reconocida. Opciones disponibles: 'catalogos', 'cufd'.");
+        if ($etapa === 'emision' || $etapa === 'etapa4') {
+            return $this->ejecutarEmision($servicio, $pv, $repeticiones ?? 125);
+        }
+
+        $this->error("Etapa '{$etapa}' no reconocida. Opciones disponibles: 'catalogos', 'cufd', 'emision'.");
 
         return Command::FAILURE;
     }
@@ -145,6 +149,52 @@ class HomologarSiatCommand extends Command
         $this->line("• Total solicitudes CUFD : {$resultado['total_intentos']}");
         $this->line("• Exitosas (SIN)         : <fg=green>{$resultado['exitosos']}</>");
         $this->line('• Fallidas               : '.($resultado['fallidos'] > 0 ? "<fg=red>{$resultado['fallidos']}</>" : '0'));
+        $this->info('---------------------------------------------------------------');
+
+        return $resultado['fallidos'] === 0 ? Command::SUCCESS : Command::FAILURE;
+    }
+
+    protected function ejecutarEmision(
+        SiatHomologacionService $servicio,
+        ?int $pv,
+        int $repeticiones
+    ): int {
+        $this->comment('Iniciando ETAPA IV: Consumo de Métodos de Emisión Individual (Factura Compra-Venta)');
+        $this->line("• Repeticiones por registro : {$repeticiones}");
+        $this->line('• Punto de Venta            : '.($pv !== null ? "PV {$pv}" : 'Ambos (PV 1 y PV 0)'));
+        $this->newLine();
+
+        $barra = null;
+        $currentRegistro = null;
+
+        $resultado = $servicio->ejecutarEtapaEmision(
+            $repeticiones,
+            $pv,
+            function ($regIdx, $totalRegs, $info) use (&$barra, &$currentRegistro) {
+                $claveReg = "emision_pv{$info['pv']}";
+                if ($currentRegistro !== $claveReg) {
+                    $currentRegistro = $claveReg;
+                    $this->newLine();
+                    $this->line("<fg=cyan>[{$regIdx}/{$totalRegs}]</> Emisión Factura Individual (<options=bold>PV {$info['pv']}</>) -> recepcionFactura");
+                    $barra = $this->output->createProgressBar($info['total_iteraciones']);
+                    $barra->setFormat(' %current%/%max% [%bar%] %percent:3s%% - <fg=green>✔ %message%</>');
+                    $barra->setMessage('0 exitosos');
+                    $barra->start();
+                }
+
+                if ($barra) {
+                    $barra->setMessage("{$info['exitosos']} exitosos".($info['fallidos'] > 0 ? " | <fg=red>✖ {$info['fallidos']} fallos</>" : ''));
+                    $barra->advance();
+                }
+            }
+        );
+
+        $this->newLine(2);
+        $this->info('---------------------------------------------------------------');
+        $this->info('RESUMEN DE ETAPA IV (EMISIÓN INDIVIDUAL):');
+        $this->line("• Total envíos XML    : {$resultado['total_intentos']}");
+        $this->line("• Aprobadas por SIN   : <fg=green>{$resultado['exitosos']}</>");
+        $this->line('• Fallidas            : '.($resultado['fallidos'] > 0 ? "<fg=red>{$resultado['fallidos']}</>" : '0'));
         $this->info('---------------------------------------------------------------');
 
         return $resultado['fallidos'] === 0 ? Command::SUCCESS : Command::FAILURE;

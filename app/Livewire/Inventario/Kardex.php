@@ -50,6 +50,10 @@ class Kardex extends Component
 
     public string $nuevaFechaVencimiento = '';
 
+    public float|string $nuevoPrecioCompra = 0;
+
+    public float|string $nuevoPrecioVenta = 0;
+
     public string $nuevoTipoMovimiento = 'AJUSTE_POSITIVO'; // 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO', 'BAJA_VENCIMIENTO'
 
     public float|string $nuevaCantidad = 1;
@@ -162,8 +166,10 @@ class Kardex extends Component
 
             $prod = Producto::findOrFail($this->nuevoProductoId);
             $cantidad = (float) $this->nuevaCantidad;
+            $precioCompra = (float) ($this->nuevoPrecioCompra > 0 ? $this->nuevoPrecioCompra : ($prod->precio_compra ?? 0));
+            $precioVenta = (float) ($this->nuevoPrecioVenta > 0 ? $this->nuevoPrecioVenta : ($prod->precio_venta ?? 0));
 
-            DB::transaction(function () use ($prod, $cantidad) {
+            DB::transaction(function () use ($prod, $cantidad, $precioCompra, $precioVenta) {
                 $lote = Lote::create([
                     'producto_id' => $prod->id,
                     'sucursal_id' => $this->nuevoSucursalId,
@@ -171,11 +177,18 @@ class Kardex extends Component
                     'fecha_vencimiento' => $this->nuevaFechaVencimiento,
                     'stock_actual' => $cantidad,
                     'stock_minimo_alerta' => (float) ($prod->minimo_stock ?? 10),
-                    'precio_compra' => (float) ($prod->precio_compra ?? 0),
-                    'precio_venta' => (float) ($prod->precio_venta ?? 0),
+                    'precio_compra' => $precioCompra,
+                    'precio_venta' => $precioVenta,
                     'ubicacion_estante' => $prod->ubicacion_estante ? trim($prod->ubicacion_estante) : null,
                     'estado' => 'ACTIVO',
                     'usuario_creador_id' => Auth::id(),
+                    'usuario_modificador_id' => Auth::id(),
+                ]);
+
+                // Actualizar el Producto maestro con los últimos precios de compra y venta del nuevo lote
+                $prod->update([
+                    'precio_compra' => $precioCompra,
+                    'precio_venta' => $precioVenta,
                     'usuario_modificador_id' => Auth::id(),
                 ]);
 
@@ -191,8 +204,8 @@ class Kardex extends Component
                     'fecha_caducidad' => $lote->fecha_vencimiento,
                     'fecha' => now(),
                     'descripcion' => trim($this->nuevoMotivo),
-                    'precio_compra' => (float) $prod->precio_compra,
-                    'precio_venta' => (float) $prod->precio_venta,
+                    'precio_compra' => $precioCompra,
+                    'precio_venta' => $precioVenta,
                     'estado' => 'ACTIVO',
                     'usuario_creador_id' => Auth::id(),
                 ]);
@@ -292,6 +305,8 @@ class Kardex extends Component
             $this->nuevoProductoId = $producto->id;
             $this->nuevoLoteId = null;
             $this->productoSearch = '';
+            $this->nuevoPrecioCompra = (float) $producto->precio_compra;
+            $this->nuevoPrecioVenta = (float) $producto->precio_venta;
 
             // Verificar si hay lotes en la sucursal seleccionada
             $tieneLotes = Lote::where('producto_id', $producto->id)
@@ -333,6 +348,8 @@ class Kardex extends Component
             'nuevoTipoMovimiento',
             'nuevaCantidad',
             'nuevoMotivo',
+            'nuevoPrecioCompra',
+            'nuevoPrecioVenta',
         ]);
         $this->resetValidation();
     }

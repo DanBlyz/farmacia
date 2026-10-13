@@ -205,7 +205,8 @@
         @endanypermiso
 
         <!-- SECCIÓN: VENTAS & POS -->
-        <div class="space-y-1" x-data="{ open: false }">
+        @anypermiso(['ventas.pos.ver', 'cajas.control.ver', 'ventas.facturas.ver'])
+        <div class="space-y-1" x-data="{ open: {{ request()->routeIs('ventas.*', 'cajas.*') ? 'true' : 'false' }} }">
             <p :class="{'hidden': !sidebarOpen && !mobileOpen, 'block': sidebarOpen || mobileOpen}" 
                class="px-3 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
                 Ventas & Caja
@@ -213,7 +214,7 @@
             
             <button @click="open = !open" 
                     :class="{'px-3': sidebarOpen || mobileOpen, 'justify-center px-0': !sidebarOpen && !mobileOpen}"
-                    class="w-full flex items-center justify-between py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:bg-slate-800/80 hover:text-white transition-all duration-150"
+                    class="w-full flex items-center justify-between py-2.5 rounded-xl text-sm font-medium {{ request()->routeIs('ventas.*', 'cajas.*') ? 'text-white bg-slate-800/80 font-semibold' : 'text-slate-300 hover:bg-slate-800/80 hover:text-white' }} transition-all duration-150"
                     title="Ventas">
                 <div class="flex items-center gap-3 truncate">
                     <svg class="w-5 h-5 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
@@ -223,20 +224,26 @@
             </button>
 
             <div x-show="open" x-collapse x-cloak :class="{'hidden': !sidebarOpen && !mobileOpen}" class="pl-9 pr-2 py-1 space-y-1 border-l border-slate-800 ml-5 text-xs">
-                <a href="#" class="block py-2 px-3 rounded-lg text-emerald-400 font-semibold hover:bg-emerald-500/10 transition-colors truncate">
-                    Terminal POSr
-                </a>
-                <a href="#" class="block py-2 px-3 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors truncate">
+                @permiso('ventas.pos.ver')
+                <a href="{{ route('ventas.pos') }}" class="block py-2 px-3 rounded-lg {{ request()->routeIs('ventas.pos') ? 'text-emerald-400 font-semibold bg-emerald-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition-colors truncate">
                     Facturación SIAT en Línea
                 </a>
-                <a href="#" class="block py-2 px-3 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors truncate">
+                @endpermiso
+
+                @permiso('cajas.control.ver')
+                <a href="{{ route('cajas.control') }}" class="block py-2 px-3 rounded-lg {{ request()->routeIs('cajas.control') ? 'text-emerald-400 font-semibold bg-emerald-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition-colors truncate">
                     Apertura y Cierre de Caja
                 </a>
-                <a href="#" class="block py-2 px-3 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors truncate">
+                @endpermiso
+
+                @permiso('ventas.facturas.ver')
+                <a href="{{ route('ventas.historial') }}" class="block py-2 px-3 rounded-lg {{ request()->routeIs('ventas.historial') ? 'text-emerald-400 font-semibold bg-emerald-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition-colors truncate">
                     Historial de Ventas
                 </a>
+                @endpermiso
             </div>
         </div>
+        @endanypermiso
 
         <!-- SECCIÓN: REPORTES -->
         <div class="space-y-1">

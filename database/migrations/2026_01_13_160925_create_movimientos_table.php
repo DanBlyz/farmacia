@@ -26,7 +26,7 @@ return new class extends Migration
             $table->unsignedBigInteger('detalle_id')->nullable();
             $table->foreign('sucursal_id')->references('id')->on('sucursales');
             $table->unsignedBigInteger('sucursal_id')->nullable();
-            
+
             $table->decimal('precio_compra', 12, 2)->nullable();
             $table->decimal('precio_venta', 12, 2)->nullable();
             $table->date('fecha_caducidad')->nullable();

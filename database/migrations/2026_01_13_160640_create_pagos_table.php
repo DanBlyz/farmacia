@@ -26,7 +26,7 @@ return new class extends Migration
             $table->unsignedBigInteger('punto_venta_id')->nullable();
             $table->foreign('caja_id')->references('id')->on('cajas');
             $table->unsignedBigInteger('caja_id')->nullable();
-            
+
             $table->decimal('monto', 12, 2)->nullable();
             $table->decimal('cambio', 12, 2)->nullable();
             $table->dateTime('fecha')->nullable();

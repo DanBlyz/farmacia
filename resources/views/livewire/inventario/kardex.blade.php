@@ -533,6 +533,29 @@
                                        class="w-full py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
                                 @error('nuevaFechaVencimiento') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
                             </div>
+
+                            <div class="grid grid-cols-2 gap-3 pt-1 border-t border-teal-200/50 dark:border-teal-800/30">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                        Precio Compra (Bs.)
+                                    </label>
+                                    <input type="number" step="0.01" min="0" 
+                                           wire:model="nuevoPrecioCompra" 
+                                           placeholder="0.00"
+                                           class="w-full py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
+                                    <span class="text-[10px] text-slate-400 mt-0.5 block">Actualiza costo del producto</span>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                        Precio Venta (Bs.)
+                                    </label>
+                                    <input type="number" step="0.01" min="0" 
+                                           wire:model="nuevoPrecioVenta" 
+                                           placeholder="0.00"
+                                           class="w-full py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
+                                    <span class="text-[10px] text-slate-400 mt-0.5 block">Actualiza precio en POS</span>
+                                </div>
+                            </div>
                         </div>
                     @endif
                 </div>

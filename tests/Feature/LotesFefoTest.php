@@ -1,9 +1,11 @@
 <?php
 
+use App\Livewire\Inventario\Lotes;
 use App\Models\Lote;
 use App\Models\Producto;
 use App\Models\Sucursal;
 use App\Models\User;
+use Livewire\Livewire;
 
 test('it dispatches the lot with the earliest expiration date under FEFO', function () {
     $sucursal = Sucursal::factory()->create();
@@ -174,4 +176,30 @@ test('it supports soft deletes and auditable tracking on lotes', function () {
 
     $lote->delete();
     $this->assertSoftDeleted('lotes', ['id' => $lote->id]);
+});
+
+test('entering a new lot updates the product purchase and selling prices to the latest entered values', function () {
+    $user = User::factory()->admin()->create();
+    $sucursal = Sucursal::factory()->create();
+    $producto = Producto::factory()->create([
+        'precio_compra' => 10.00,
+        'precio_venta' => 15.00,
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(Lotes::class)
+        ->call('create')
+        ->set('producto_id', $producto->id)
+        ->set('sucursal_id', $sucursal->id)
+        ->set('numero_lote', 'LOT-NUEVO-PRECIO-01')
+        ->set('fecha_vencimiento', now()->addYear()->toDateString())
+        ->set('stock_actual', 25)
+        ->set('precio_compra', 18.50)
+        ->set('precio_venta', 28.00)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $productoActualizado = $producto->fresh();
+    expect((float) $productoActualizado->precio_compra)->toBe(18.50)
+        ->and((float) $productoActualizado->precio_venta)->toBe(28.00);
 });

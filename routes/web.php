@@ -1,16 +1,20 @@
 <?php
 
+use App\Http\Controllers\FacturaImpresionController;
 use App\Http\Controllers\ProfileController;
 use App\Livewire\Administracion\Clientes;
 use App\Livewire\Administracion\Proveedores;
 use App\Livewire\Administracion\Roles;
 use App\Livewire\Administracion\Sucursales;
 use App\Livewire\Administracion\Usuarios;
+use App\Livewire\Cajas\ControlCajas;
 use App\Livewire\Inventario\Kardex;
 use App\Livewire\Inventario\Lotes;
 use App\Livewire\Inventario\Productos;
 use App\Livewire\Sincronizacion\Catalogos;
 use App\Livewire\Sincronizacion\EventosSignificativos;
+use App\Livewire\Ventas\HistorialVentas;
+use App\Livewire\Ventas\Pos;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -44,6 +48,18 @@ Route::middleware('auth')->group(function () {
         Route::get('/productos', Productos::class)->middleware('permiso:inventario.productos.ver')->name('productos');
         Route::get('/lotes', Lotes::class)->middleware('permiso:inventario.lotes.ver')->name('lotes');
         Route::get('/kardex', Kardex::class)->middleware('permiso:inventario.kardex.ver')->name('kardex');
+    });
+
+    Route::prefix('cajas')->as('cajas.')->group(function () {
+        Route::get('/control', ControlCajas::class)->middleware('permiso:cajas.control.ver')->name('control');
+    });
+
+    Route::prefix('ventas')->as('ventas.')->group(function () {
+        Route::get('/pos', Pos::class)->middleware('permiso:ventas.pos.ver')->name('pos');
+        Route::get('/historial', HistorialVentas::class)->middleware('permiso:ventas.facturas.ver')->name('historial');
+        Route::get('/factura/{factura}/imprimir', [FacturaImpresionController::class, 'imprimirTicket'])
+            ->middleware('permiso:ventas.facturas.imprimir')
+            ->name('factura.imprimir');
     });
 });
 

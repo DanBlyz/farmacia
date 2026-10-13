@@ -13,9 +13,9 @@ class SucursalFactory extends Factory
     public function definition(): array
     {
         return [
-            'nombre' => 'Sucursal ' . $this->faker->unique()->city(),
+            'nombre' => 'Sucursal '.$this->faker->unique()->city(),
             'direccion' => $this->faker->streetAddress(),
-            'codigo_sucursal' => 'SUC-' . $this->faker->unique()->numberBetween(100, 999),
+            'codigo_sucursal' => 'SUC-'.$this->faker->unique()->numberBetween(100, 999),
             'usuario_creador_id' => User::factory(),
         ];
     }

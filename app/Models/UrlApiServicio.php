@@ -63,4 +63,14 @@ class UrlApiServicio extends Model
             ->where('nombre', 'url_facturacion_operaciones')
             ->first();
     }
+
+    public function getUrlFacturacionOperaciones($ambiente, $modalidad)
+    {
+        return $this->getUrlOperaciones($ambiente, $modalidad);
+    }
+
+    public function getUrlFacturacionCompraVenta($ambiente, $modalidad)
+    {
+        return $this->getUrlFacturacionCompraVentaElectronica($ambiente, $modalidad);
+    }
 }

@@ -241,6 +241,16 @@ class Lotes extends Component
                 $msg = 'Lote registrado con éxito en el almacén.';
             }
 
+            // Actualizar el Producto maestro con los últimos precios ingresados por el lote
+            $producto = Producto::find($this->producto_id);
+            if ($producto) {
+                $producto->update([
+                    'precio_compra' => (float) $this->precio_compra,
+                    'precio_venta' => (float) $this->precio_venta,
+                    'usuario_modificador_id' => Auth::id(),
+                ]);
+            }
+
             $this->closeModal();
             session()->flash('message', $msg);
             $this->dispatch('swal-alert', icon: 'success', title: '¡Operación Exitosa!', message: $msg);

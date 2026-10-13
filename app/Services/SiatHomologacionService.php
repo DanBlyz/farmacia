@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Http\Controllers\SiatController;
 use App\Models\Cufd;
 use App\Models\Cuis;
+use App\Models\Detalle;
+use App\Models\Factura;
 use App\Models\PuntoVenta;
 use App\Models\Sucursal;
 use App\Models\UrlApiServicio;
@@ -340,6 +342,195 @@ class SiatHomologacionService
 
                 // Pausa prudente de 120 ms
                 usleep(120000);
+            }
+
+            $detalle[] = [
+                'pv' => $pv,
+                'exitosos' => $exitososRegistro,
+                'fallidos' => $fallidosRegistro,
+                'error' => $ultimoError,
+            ];
+        }
+
+        return [
+            'total_intentos' => $totalIntentos,
+            'exitosos' => $totalExitosos,
+            'fallidos' => $totalFallidos,
+            'detalle' => $detalle,
+        ];
+    }
+
+    /**
+     * Ejecuta la ETAPA IV de Homologación: Consumo de métodos de emisión individual (250 Casos: 125 en PV 1 + 125 en PV 0)
+     */
+    public function ejecutarEtapaEmision(
+        int $repeticiones = 125,
+        ?int $puntoVentaFiltro = null,
+        ?callable $onProgress = null
+    ): array {
+        $pvs = $puntoVentaFiltro !== null ? [$puntoVentaFiltro] : [1, 0];
+        $totalRegistros = count($pvs);
+        $registroIndex = 0;
+        $totalIntentos = 0;
+        $totalExitosos = 0;
+        $totalFallidos = 0;
+        $detalle = [];
+
+        $facturacionService = app(SiatFacturacionService::class);
+        $urlApi = new UrlApiServicio;
+        $ambiente = (int) config('siat.codigo_ambiente', 2);
+        $modalidad = (int) config('siat.codigo_modalidad', 2);
+        $urlCompraVenta = $urlApi->getUrlFacturacionCompraVenta($ambiente, $modalidad);
+
+        $sucursal = Sucursal::orderBy('codigo_sucursal', 'asc')->first();
+
+        foreach ($pvs as $pv) {
+            $registroIndex++;
+            $contexto = $this->resolverContexto($pv);
+
+            if (! $contexto['success'] || ! $urlCompraVenta) {
+                $msg = $contexto['message'] ?? 'URL de Facturación Compra-Venta no configurada.';
+                $detalle[] = [
+                    'pv' => $pv,
+                    'exitosos' => 0,
+                    'fallidos' => $repeticiones,
+                    'error' => $msg,
+                ];
+                $totalIntentos += $repeticiones;
+                $totalFallidos += $repeticiones;
+
+                continue;
+            }
+
+            $cufd = Cufd::where('sucursal_id', $contexto['sucursalId'])
+                ->where('punto_venta_id', $contexto['puntoVentaId'])
+                ->where('fecha_vigencia', '>', now())
+                ->latest('id')
+                ->first() ?? Cufd::where('sucursal_id', $contexto['sucursalId'])->latest('id')->first();
+
+            if (! $cufd) {
+                $detalle[] = [
+                    'pv' => $pv,
+                    'exitosos' => 0,
+                    'fallidos' => $repeticiones,
+                    'error' => "Sin CUFD vigente para el Punto de Venta {$pv}.",
+                ];
+                $totalIntentos += $repeticiones;
+                $totalFallidos += $repeticiones;
+
+                continue;
+            }
+
+            $exitososRegistro = 0;
+            $fallidosRegistro = 0;
+            $ultimoError = null;
+            $puntoVentaModel = PuntoVenta::find($contexto['puntoVentaId']);
+
+            $siguienteFacturaBase = $facturacionService->obtenerSiguienteNumeroFactura($sucursal->id, $contexto['puntoVentaId']);
+
+            for ($i = 1; $i <= $repeticiones; $i++) {
+                $totalIntentos++;
+                try {
+                    $fechaActual = now();
+                    $numeroFactura = $siguienteFacturaBase + ($i - 1);
+                    $fechaHoraCadena = $fechaActual->format('YmdHis').'000';
+                    $cuf = $facturacionService->calcularCuf(
+                        $contexto['nit'],
+                        $fechaHoraCadena,
+                        $contexto['codigoSucursal'],
+                        $contexto['modalidad'],
+                        1,
+                        1,
+                        1,
+                        $numeroFactura,
+                        $contexto['codigoPuntoVenta'],
+                        $cufd->codigo_control
+                    );
+
+                    // Mock / Instancia rápida de factura para homologación
+                    $facturaDummy = new Factura([
+                        'fecha' => $fechaActual,
+                        'numero_factura' => (string) $numeroFactura,
+                        'cuf' => $cuf,
+                        'codigo_tipo_documento_identidad' => 1,
+                        'numero_documento' => '1234567',
+                        'razon_social' => 'JUAN PEREZ',
+                        'total' => 15.00,
+                        'monto_total_sujeto_iva' => 15.00,
+                        'descuento_adicional' => 0,
+                        'codigo_metodo_pago' => 1,
+                    ]);
+
+                    $detalleDummy = [
+                        new Detalle([
+                            'producto_id' => 1,
+                            'nombre_producto' => 'PARACETAMOL 500MG COMPRIMIDOS',
+                            'precio' => 15.00,
+                            'cantidad' => 1,
+                            'descuento' => 0,
+                            'total' => 15.00,
+                        ]),
+                    ];
+
+                    $xml = $facturacionService->generarXmlFactura($facturaDummy, $detalleDummy, $cufd, $sucursal, $puntoVentaModel);
+                    $gzip = $facturacionService->comprimirXmlGzip($xml);
+                    $hash = $facturacionService->calcularHashSha256($gzip);
+                    $fechaEnvioIso = $fechaActual->format('Y-m-d\TH:i:s').'.000';
+
+                    $respRaw = $this->siatController->recepcionFactura(
+                        $contexto['token'],
+                        $urlCompraVenta->url_servicio,
+                        $contexto['ambiente'],
+                        1, // Sector 1
+                        $contexto['modalidad'],
+                        $contexto['codigoPuntoVenta'],
+                        $contexto['codigoSistema'],
+                        $contexto['codigoSucursal'],
+                        $cufd->codigo,
+                        $contexto['cuis'],
+                        $contexto['nit'],
+                        1, // Crédito Fiscal
+                        $gzip,
+                        $fechaEnvioIso,
+                        $hash
+                    );
+
+                    $resp = json_decode($respRaw, true);
+                    $resFacturacion = $resp['resultado']['RespuestaServicioFacturacion'] ?? [];
+                    $codigoEstado = $resFacturacion['codigoEstado'] ?? null;
+                    $codigoDescripcion = $resFacturacion['codigoDescripcion'] ?? null;
+                    $transaccion = $resFacturacion['transaccion'] ?? false;
+
+                    if (($resp['estado'] ?? '') === 'success' && ($codigoEstado == 908 || $codigoDescripcion === 'VALIDADA' || $transaccion === true)) {
+                        $exitososRegistro++;
+                        $totalExitosos++;
+                    } else {
+                        $fallidosRegistro++;
+                        $totalFallidos++;
+                        $ultimoError = $codigoDescripcion ?? ($resp['msg'] ?? 'Fallo SOAP en recepción individual');
+                        if (! empty($resFacturacion['mensajesList'])) {
+                            $msgs = is_array($resFacturacion['mensajesList']) ? $resFacturacion['mensajesList'] : [$resFacturacion['mensajesList']];
+                            $ultimoError .= ': '.json_encode($msgs, JSON_UNESCAPED_UNICODE);
+                        }
+                    }
+                } catch (Exception $e) {
+                    $fallidosRegistro++;
+                    $totalFallidos++;
+                    $ultimoError = $e->getMessage();
+                }
+
+                if ($onProgress) {
+                    $onProgress($registroIndex, $totalRegistros, [
+                        'pv' => $pv,
+                        'iteracion' => $i,
+                        'total_iteraciones' => $repeticiones,
+                        'exitosos' => $exitososRegistro,
+                        'fallidos' => $fallidosRegistro,
+                        'error' => $ultimoError,
+                    ]);
+                }
+
+                usleep(120000); // Pausa anti-bloqueo 120 ms
             }
 
             $detalle[] = [

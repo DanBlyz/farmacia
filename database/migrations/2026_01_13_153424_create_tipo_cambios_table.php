@@ -20,7 +20,7 @@ return new class extends Migration
             $table->foreign('usuario_eliminador_id')->references('id')->on('users');
             $table->unsignedBigInteger('usuario_eliminador_id')->nullable();
 
-            $table->decimal('tipo_cambio_boliviano', 12,2)->nullable();
+            $table->decimal('tipo_cambio_boliviano', 12, 2)->nullable();
 
             $table->string('estado')->nullable();
             $table->datetime('deleted_at')->nullable();

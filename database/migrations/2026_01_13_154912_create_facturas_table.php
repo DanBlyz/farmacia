@@ -30,7 +30,7 @@ return new class extends Migration
             $table->unsignedBigInteger('cliente_id')->nullable();
             $table->foreign('punto_venta_id')->references('id')->on('punto_ventas');
             $table->unsignedBigInteger('punto_venta_id')->nullable();
-            
+
             $table->dateTime('fecha')->nullable();
             $table->string('nit')->nullable();
             $table->string('razon_social')->nullable();
