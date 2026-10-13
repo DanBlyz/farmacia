@@ -131,7 +131,7 @@ test('can process a sale with multiple payment methods, discounts FEFO batch sto
         ->test(Pos::class)
         ->call('seleccionarProducto', $producto->id)
         ->assertSet('selectedProductoId', $producto->id)
-        ->assertSet('selectedLoteId', $lote->id)
+        ->assertSet('selectedLoteId', 'AUTO_FEFO')
         ->set('cantidadAgregar', 3) // 3 * 20 = 60 Bs
         ->set('descuentoItemAgregar', 5) // Descuento 5 Bs = 55 Bs
         ->call('agregarAlCarrito')
@@ -288,4 +288,175 @@ test('authenticated users with permission can generate and stream thermal ticket
     $response->assertStatus(200);
     $response->assertHeader('content-type', 'application/pdf');
     expect($response->getContent())->toContain('%PDF');
+});
+
+test('auto fefo dispenses across multiple lots according to expiration dates and handles decimal payments with precision', function () {
+    $user = User::factory()->admin()->create();
+    $sucursal = Sucursal::factory()->create(['codigo_sucursal' => 0]);
+    $puntoVenta = PuntoVenta::create([
+        'sucursal_id' => $sucursal->id,
+        'nombre' => 'Caja Central 1',
+        'codigo' => 0,
+        'estado' => 'ACTIVO',
+    ]);
+
+    Cufd::create([
+        'usuario_creador_id' => $user->id,
+        'sucursal_id' => $sucursal->id,
+        'punto_venta_id' => $puntoVenta->id,
+        'codigo_ambiente' => 2,
+        'codigo' => 'B0A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q7R8S9T0',
+        'codigo_control' => 'CONTROL123456',
+        'direccion' => 'Av. Principal Central Farma',
+        'fecha_vigencia' => now()->addHours(24),
+    ]);
+
+    Caja::factory()->create([
+        'usuario_id' => $user->id,
+        'sucursal_id' => $sucursal->id,
+        'punto_venta_id' => $puntoVenta->id,
+        'monto_apertura' => 100.00,
+        'saldo' => 100.00,
+        'estado' => 'ABIERTA',
+    ]);
+
+    $producto = Producto::factory()->create([
+        'nombre' => 'Paracetamol 500mg Jarabe',
+        'precio_venta' => 10.00,
+    ]);
+
+    // Lote 1: vence en 1 mes (2 unidades)
+    $lote1 = Lote::factory()->create([
+        'producto_id' => $producto->id,
+        'sucursal_id' => $sucursal->id,
+        'numero_lote' => 'LOTE-MES-1',
+        'fecha_vencimiento' => Carbon::now()->addMonth()->toDateString(),
+        'stock_actual' => 2,
+        'precio_venta' => 10.00,
+        'estado' => 'ACTIVO',
+    ]);
+
+    // Lote 2: vence en 2 meses (3 unidades)
+    $lote2 = Lote::factory()->create([
+        'producto_id' => $producto->id,
+        'sucursal_id' => $sucursal->id,
+        'numero_lote' => 'LOTE-MES-2',
+        'fecha_vencimiento' => Carbon::now()->addMonths(2)->toDateString(),
+        'stock_actual' => 3,
+        'precio_venta' => 10.00,
+        'estado' => 'ACTIVO',
+    ]);
+
+    // Lote 3: vence en 5 meses (5 unidades)
+    $lote3 = Lote::factory()->create([
+        'producto_id' => $producto->id,
+        'sucursal_id' => $sucursal->id,
+        'numero_lote' => 'LOTE-MES-5',
+        'fecha_vencimiento' => Carbon::now()->addMonths(5)->toDateString(),
+        'stock_actual' => 5,
+        'precio_venta' => 10.00,
+        'estado' => 'ACTIVO',
+    ]);
+
+    // Cliente pide 5 unidades en total. Debe consumir 2 de lote1 y 3 de lote2. Lote3 queda intacto.
+    Livewire::actingAs($user)
+        ->test(Pos::class)
+        ->call('seleccionarProducto', $producto->id)
+        ->assertSet('selectedLoteId', 'AUTO_FEFO')
+        ->set('cantidadAgregar', 5)
+        ->call('agregarAlCarrito')
+        // Total = 5 * 10 = 50.00 Bs. Supongamos un descuento general para tener decimales: 10.60 Bs -> total a pagar 39.40 Bs
+        ->set('descuentoGeneral', 10.60)
+        ->assertSet('montoEfectivo', '39.40')
+        // Simular pago mixto: 30 en efectivo y saldo restante en QR
+        ->set('montoEfectivo', '30.00')
+        ->call('ajustarSaldoMetodo', 'qr')
+        ->assertSet('montoQr', '9.40')
+        ->call('procesarVenta')
+        ->assertHasNoErrors()
+        ->assertSet('showTicketModal', true);
+
+    // Verificar consumos en los lotes
+    expect((float) $lote1->fresh()->stock_actual)->toBe(0.0)
+        ->and($lote1->fresh()->estado)->toBe('AGOTADO')
+        ->and((float) $lote2->fresh()->stock_actual)->toBe(0.0)
+        ->and($lote2->fresh()->estado)->toBe('AGOTADO')
+        ->and((float) $lote3->fresh()->stock_actual)->toBe(5.0);
+});
+
+test('selling price strictly prioritizes updated product price over lote price', function () {
+    $user = User::factory()->admin()->create();
+    $sucursal = Sucursal::factory()->create(['codigo_sucursal' => 0]);
+    $puntoVenta = PuntoVenta::create([
+        'sucursal_id' => $sucursal->id,
+        'nombre' => 'Caja Central 1',
+        'codigo' => 0,
+        'estado' => 'ACTIVO',
+    ]);
+
+    Cufd::create([
+        'usuario_creador_id' => $user->id,
+        'sucursal_id' => $sucursal->id,
+        'punto_venta_id' => $puntoVenta->id,
+        'codigo_ambiente' => 2,
+        'codigo' => 'B0A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q7R8S9T0',
+        'codigo_control' => 'CONTROL123456',
+        'direccion' => 'Av. Principal Central Farma',
+        'fecha_vigencia' => now()->addHours(24),
+    ]);
+
+    Caja::factory()->create([
+        'usuario_id' => $user->id,
+        'sucursal_id' => $sucursal->id,
+        'punto_venta_id' => $puntoVenta->id,
+        'monto_apertura' => 100.00,
+        'saldo' => 100.00,
+        'estado' => 'ABIERTA',
+    ]);
+
+    // Producto actualizado con precio nuevo de 35.00 Bs
+    $producto = Producto::factory()->create([
+        'nombre' => 'Amoxicilina 500mg Cápsulas',
+        'precio_venta' => 35.00,
+    ]);
+
+    // Lote antiguo que se registró previamente con precio de 20.00 Bs
+    $loteAntiguo = Lote::factory()->create([
+        'producto_id' => $producto->id,
+        'sucursal_id' => $sucursal->id,
+        'numero_lote' => 'LOTE-VIEJO-01',
+        'fecha_vencimiento' => Carbon::now()->addMonths(6)->toDateString(),
+        'stock_actual' => 10,
+        'precio_compra' => 12.00,
+        'precio_venta' => 20.00, // Precio desactualizado del lote
+        'estado' => 'ACTIVO',
+    ]);
+
+    // Al agregar 2 unidades en el POS, el precio debe ser 35.00 Bs (total 70.00 Bs), NO 20.00 Bs
+    $test = Livewire::actingAs($user)
+        ->test(Pos::class)
+        ->call('seleccionarProducto', $producto->id)
+        ->set('cantidadAgregar', 2)
+        ->call('agregarAlCarrito');
+
+    $carrito = $test->get('carrito');
+    expect($carrito[0]['precio'])->toBe(35.00)
+        ->and($carrito[0]['total'])->toBe(70.00);
+
+    // Procesar venta y verificar que la factura y el detalle se generaron a 35.00 Bs
+    $test->set('montoEfectivo', '70.00')
+        ->call('procesarVenta')
+        ->assertHasNoErrors();
+
+    $factura = Factura::where('sucursal_id', $sucursal->id)->latest('id')->first();
+    expect((float) $factura->total)->toBe(70.00);
+
+    $this->assertDatabaseHas('detalles', [
+        'factura_id' => $factura->id,
+        'producto_id' => $producto->id,
+        'lote_id' => $loteAntiguo->id,
+        'precio' => 35.00,
+        'cantidad' => 2,
+        'total' => 70.00,
+    ]);
 });

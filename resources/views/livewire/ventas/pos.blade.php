@@ -152,8 +152,8 @@
                             <span class="font-bold text-xs text-slate-800 dark:text-white">
                                 {{ $prodSeleccionado?->nombre }}
                             </span>
-                            <span class="text-xs text-slate-400">
-                                (Ref: Bs. {{ number_format((float) ($prodSeleccionado?->precio_venta ?? 0), 2) }})
+                            <span class="font-mono font-bold text-xs text-teal-700 dark:text-teal-300 bg-teal-100/70 dark:bg-teal-900/40 px-2 py-0.5 rounded-lg border border-teal-200 dark:border-teal-800">
+                                Precio Venta: Bs. {{ number_format((float) ($prodSeleccionado?->precio_venta ?? 0), 2) }}
                             </span>
                         </div>
                         <button type="button" wire:click="cancelarSeleccionProducto" class="text-xs text-slate-400 hover:text-rose-500">
@@ -169,10 +169,10 @@
                             </label>
                             <select wire:model.live="selectedLoteId" 
                                     class="w-full py-1.5 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 font-mono">
-                                <option value="">Seleccione lote...</option>
+                                <option value="AUTO_FEFO">Despacho Automático FEFO (Total Disp: {{ number_format($lotesProducto->sum('stock_actual'), 0) }} und)</option>
                                 @foreach($lotesProducto as $loteOpt)
                                     <option value="{{ $loteOpt->id }}">
-                                        {{ $loteOpt->numero_lote }} | Vence: {{ \Carbon\Carbon::parse($loteOpt->fecha_vencimiento)->format('d/m/Y') }} | Stock: {{ number_format($loteOpt->stock_actual, 0) }}
+                                        Lote: {{ $loteOpt->numero_lote }} | Vence: {{ \Carbon\Carbon::parse($loteOpt->fecha_vencimiento)->format('d/m/Y') }} | Disp: {{ number_format($loteOpt->stock_actual, 0) }}
                                     </option>
                                 @endforeach
                             </select>
@@ -195,7 +195,7 @@
                                 Descuento Ítem (Bs.)
                             </label>
                             <div class="flex items-center gap-2">
-                                <input type="number" step="0.5" min="0" wire:model="descuentoItemAgregar" placeholder="0.00"
+                                <input type="number" step="0.1" min="0" wire:model="descuentoItemAgregar" placeholder="0.00"
                                        class="w-full py-1.5 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
                                 <button type="button" wire:click="agregarAlCarrito"
                                         class="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-sm transition-all shrink-0">
@@ -367,7 +367,7 @@
 
                 <div class="flex items-center justify-between gap-3 text-xs">
                     <span class="text-slate-500">Descuento Global (Bs.):</span>
-                    <input type="number" step="0.5" min="0" wire:model.live="descuentoGeneral" placeholder="0.00"
+                    <input type="number" step="0.01" min="0" inputmode="decimal" wire:model.live.debounce.350ms="descuentoGeneral" placeholder="0.00"
                            class="w-24 py-1 px-2 text-right rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
                 </div>
 
@@ -391,36 +391,55 @@
                 <div class="space-y-2">
                     <!-- Pago en Efectivo -->
                     <div class="flex items-center justify-between gap-2">
-                        <span class="text-slate-600 dark:text-slate-400 font-medium flex items-center gap-1.5">
-                            <i class="fas fa-money-bill-wave text-amber-500"></i> Efectivo (Bs.):
-                        </span>
-                        <input type="number" step="0.5" min="0" wire:model.live="montoEfectivo"
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-slate-600 dark:text-slate-400 font-medium flex items-center gap-1.5">
+                                <i class="fas fa-money-bill-wave text-amber-500"></i> Efectivo:
+                            </span>
+                            <button type="button" wire:click="ajustarSaldoMetodo('efectivo')" title="Completar saldo restante en efectivo" class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors border border-amber-200 dark:border-amber-800">
+                                Restante
+                            </button>
+                        </div>
+                        <input type="number" step="0.01" min="0" inputmode="decimal" wire:model.live.debounce.350ms="montoEfectivo"
                                class="w-28 py-1.5 px-2.5 text-right font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-teal-500/20">
                     </div>
 
                     <!-- Pago con QR -->
                     <div class="flex items-center justify-between gap-2">
-                        <span class="text-slate-600 dark:text-slate-400 font-medium flex items-center gap-1.5">
-                            <i class="fas fa-qrcode text-teal-500"></i> Pago QR (Bs.):
-                        </span>
-                        <input type="number" step="0.5" min="0" wire:model.live="montoQr"
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-slate-600 dark:text-slate-400 font-medium flex items-center gap-1.5">
+                                <i class="fas fa-qrcode text-teal-500"></i> Pago QR:
+                            </span>
+                            <button type="button" wire:click="ajustarSaldoMetodo('qr')" title="Completar saldo restante en QR" class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors border border-teal-200 dark:border-teal-800">
+                                Restante
+                            </button>
+                        </div>
+                        <input type="number" step="0.01" min="0" inputmode="decimal" wire:model.live.debounce.350ms="montoQr"
                                class="w-28 py-1.5 px-2.5 text-right font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-teal-500/20">
                     </div>
 
                     <!-- Pago con Transferencia -->
                     <div class="flex items-center justify-between gap-2">
-                        <span class="text-slate-600 dark:text-slate-400 font-medium flex items-center gap-1.5">
-                            <i class="fas fa-university text-indigo-500"></i> Transferencia (Bs.):
-                        </span>
-                        <input type="number" step="0.5" min="0" wire:model.live="montoTransferencia"
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-slate-600 dark:text-slate-400 font-medium flex items-center gap-1.5">
+                                <i class="fas fa-university text-indigo-500"></i> Transfer.:
+                            </span>
+                            <button type="button" wire:click="ajustarSaldoMetodo('transferencia')" title="Completar saldo restante en transferencia" class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors border border-indigo-200 dark:border-indigo-800">
+                                Restante
+                            </button>
+                        </div>
+                        <input type="number" step="0.01" min="0" inputmode="decimal" wire:model.live.debounce.350ms="montoTransferencia"
                                class="w-28 py-1.5 px-2.5 text-right font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-teal-500/20">
                     </div>
                 </div>
 
                 @php
-                    $pagoTotal = (float) $montoEfectivo + (float) $montoQr + (float) $montoTransferencia;
-                    $cambioVuelto = max(0, (float) $montoEfectivo - max(0, $totalCarrito - ((float) $montoQr + (float) $montoTransferencia)));
-                    $faltaCobrar = max(0, $totalCarrito - $pagoTotal);
+                    $totFinal = round($totalCarrito, 2);
+                    $pEf = round((float) $montoEfectivo, 2);
+                    $pQr = round((float) $montoQr, 2);
+                    $pTr = round((float) $montoTransferencia, 2);
+                    $pagoTotal = round($pEf + $pQr + $pTr, 2);
+                    $cambioVuelto = max(0, round($pEf - max(0, $totFinal - ($pQr + $pTr)), 2));
+                    $faltaCobrar = max(0, round($totFinal - $pagoTotal, 2));
                 @endphp
 
                 <!-- Vuelto / Cambio -->
@@ -431,7 +450,7 @@
                     </span>
                 </div>
 
-                @if($faltaCobrar > 0)
+                @if($faltaCobrar > 0.009)
                     <div class="text-[11px] text-rose-500 font-semibold text-right">
                         Faltan cobrar Bs. {{ number_format($faltaCobrar, 2) }}
                     </div>
@@ -441,7 +460,7 @@
                 <button type="button" 
                         wire:click="procesarVenta"
                         wire:loading.attr="disabled"
-                        {{ ! $caja || count($carrito) === 0 || $faltaCobrar > 0 ? 'disabled' : '' }}
+                        {{ ! $caja || count($carrito) === 0 || $faltaCobrar > 0.009 ? 'disabled' : '' }}
                         class="w-full py-3.5 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-extrabold text-sm shadow-md shadow-teal-600/20 transition-all flex items-center justify-center gap-2 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed">
                     <span wire:loading.remove wire:target="procesarVenta">
                         <i class="fas fa-print mr-1"></i> COBRAR Y FACTURAR SIAT (F4)

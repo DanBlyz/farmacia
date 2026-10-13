@@ -23,6 +23,8 @@ class Factura extends Model
         'motivo_anulacion_id',
         'cliente_id',
         'punto_venta_id',
+        'evento_significativo_id',
+        'paquete_id',
         'fecha',
         'nit',
         'razon_social',
@@ -107,5 +109,15 @@ class Factura extends Model
     public function vendedor()
     {
         return $this->belongsTo(User::class, 'usuario_creador_id');
+    }
+
+    public function paquete()
+    {
+        return $this->belongsTo(PaqueteFactura::class, 'paquete_id');
+    }
+
+    public function eventoSignificativo()
+    {
+        return $this->belongsTo(EventoSignificativo::class, 'evento_significativo_id');
     }
 }

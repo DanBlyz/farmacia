@@ -13,10 +13,11 @@ class HomologarSiatCommand extends Command
      * @var string
      */
     protected $signature = 'siat:homologar 
-                            {etapa : Etapa a ejecutar (catalogos | cufd | emision | eventos)} 
+                            {etapa : Etapa a ejecutar (catalogos | cufd | emision | eventos | paquetes)} 
                             {--pv= : Filtrar por punto de venta (0 o 1)} 
-                            {--repeticiones= : Cantidad de repeticiones por registro (por defecto 50 en catálogos, 100 en cufd, 125 en emision, 5 en eventos)} 
+                            {--repeticiones= : Cantidad de repeticiones por registro (por defecto 50 en catálogos, 100 en cufd, 125 en emision, 5 en eventos, 10 en paquetes)} 
                             {--motivo= : Filtrar por código de motivo (1 al 7) para eventos significativos}
+                            {--caso= : Caso específico (1 al 16) para la etapa de paquetes}
                             {--metodo= : Método SOAP específico para la etapa de catálogos}';
 
     /**
@@ -36,6 +37,7 @@ class HomologarSiatCommand extends Command
         $pv = $pvOption !== null ? (int) $pvOption : null;
         $repeticiones = $this->option('repeticiones') ? (int) $this->option('repeticiones') : null;
         $motivo = $this->option('motivo') ? (int) $this->option('motivo') : null;
+        $caso = $this->option('caso') ? (int) $this->option('caso') : null;
         $metodo = $this->option('metodo');
 
         $this->info('===============================================================');
@@ -58,7 +60,11 @@ class HomologarSiatCommand extends Command
             return $this->ejecutarEventos($servicio, $pv, $repeticiones ?? 5, $motivo);
         }
 
-        $this->error("Etapa '{$etapa}' no reconocida. Opciones disponibles: 'catalogos', 'cufd', 'emision', 'eventos'.");
+        if ($etapa === 'paquetes' || $etapa === 'etapa6') {
+            return $this->ejecutarPaquetes($servicio, $pv, $repeticiones ?? 10, $caso);
+        }
+
+        $this->error("Etapa '{$etapa}' no reconocida. Opciones disponibles: 'catalogos', 'cufd', 'emision', 'eventos', 'paquetes'.");
 
         return Command::FAILURE;
     }
@@ -261,6 +267,70 @@ class HomologarSiatCommand extends Command
             foreach ($resultado['detalle'] as $det) {
                 if ($det['fallidos'] > 0 && ! empty($det['error'])) {
                     $this->line(" <fg=yellow>• Motivo {$det['motivo']} (PV {$det['pv']}):</> {$det['error']}");
+                }
+            }
+        }
+        $this->info('---------------------------------------------------------------');
+
+        return $resultado['fallidos'] === 0 ? Command::SUCCESS : Command::FAILURE;
+    }
+
+    protected function ejecutarPaquetes(
+        SiatHomologacionService $servicio,
+        ?int $pv,
+        int $repeticiones,
+        ?int $caso
+    ): int {
+        $this->comment('Iniciando ETAPA VI: Emisión y Validación de Paquetes en Contingencia');
+        $this->line("• Repeticiones por registro : {$repeticiones}");
+        $this->line('• Punto de Venta            : '.($pv !== null ? "PV {$pv}" : 'Ambos (PV 1 y PV 0)'));
+        if ($caso !== null) {
+            $this->line("• Caso filtrado             : Caso {$caso}");
+        }
+
+        $currentRegistro = null;
+        $barra = null;
+
+        $resultado = $servicio->ejecutarEtapaPaquetes(
+            $repeticiones,
+            $pv,
+            $caso,
+            function ($regIdx, $totalRegs, $info) use (&$currentRegistro, &$barra) {
+                $claveReg = "caso{$info['caso']}";
+                if ($currentRegistro !== $claveReg) {
+                    $currentRegistro = $claveReg;
+                    $this->newLine();
+                    $tipoLabel = $info['tipo'] === 'envio' ? 'Envío Paquete' : 'Validación Paquete';
+                    $this->line("<fg=cyan>[{$regIdx}/{$totalRegs}]</> Caso {$info['caso']} (<options=bold>PV {$info['pv']}</>) - [{$tipoLabel}] {$info['descripcion']}");
+                    $barra = $this->output->createProgressBar($info['total_iteraciones']);
+                    $barra->setFormat(' %current%/%max% [%bar%] %percent:3s%% - <fg=green>✔ %message%</>');
+                    $barra->setMessage('0 exitosos');
+                    $barra->start();
+                }
+
+                if ($barra) {
+                    $msgExito = "{$info['exitosos']} exitosos";
+                    if ($info['codigo_recepcion']) {
+                        $msgExito .= ' [Cód: '.substr($info['codigo_recepcion'], 0, 15).']';
+                    }
+                    $barra->setMessage($msgExito.($info['fallidos'] > 0 ? " | <fg=red>✖ {$info['fallidos']} fallos</>" : ''));
+                    $barra->advance();
+                }
+            }
+        );
+
+        $this->newLine(2);
+        $this->info('---------------------------------------------------------------');
+        $this->info('RESUMEN DE ETAPA VI (EMISIÓN Y VALIDACIÓN DE PAQUETES):');
+        $this->line("• Total solicitudes   : {$resultado['total_intentos']}");
+        $this->line("• Aprobadas por SIN   : <fg=green>{$resultado['exitosos']}</>");
+        $this->line('• Fallidas            : '.($resultado['fallidos'] > 0 ? "<fg=red>{$resultado['fallidos']}</>" : '0'));
+        if ($resultado['fallidos'] > 0) {
+            $this->newLine();
+            $this->warn('Detalle de observaciones del SIN:');
+            foreach ($resultado['detalle'] as $det) {
+                if ($det['fallidos'] > 0 && ! empty($det['error'])) {
+                    $this->line(" <fg=yellow>• Caso {$det['caso']} (PV {$det['pv']}):</> {$det['error']}");
                 }
             }
         }

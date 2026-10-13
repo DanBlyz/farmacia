@@ -8,6 +8,7 @@ use App\Models\Cuis;
 use App\Models\Detalle;
 use App\Models\EventoSignificativo;
 use App\Models\Factura;
+use App\Models\PaqueteFactura;
 use App\Models\PuntoVenta;
 use App\Models\Sucursal;
 use App\Models\TipoEventoSignificativo;
@@ -801,6 +802,263 @@ class SiatHomologacionService
             $detalle[] = [
                 'motivo' => $codMotivo,
                 'descripcion' => $descMotivo,
+                'pv' => $pv,
+                'exitosos' => $exitososRegistro,
+                'fallidos' => $fallidosRegistro,
+                'codigo_recepcion' => $ultimoCodigoRecepcion,
+                'error' => $ultimoError,
+            ];
+        }
+
+        return [
+            'total_intentos' => $totalIntentos,
+            'exitosos' => $totalExitosos,
+            'fallidos' => $totalFallidos,
+            'detalle' => $detalle,
+        ];
+    }
+
+    /**
+     * Ejecuta las pruebas de la Etapa VI (Emisión y Validación de Paquetes en Contingencia)
+     *
+     * @param  int  $repeticiones  Cantidad de llamadas por registro (por defecto 10 para envíos, 70 para validaciones)
+     * @param  int|null  $pvFiltrado  1, 0, o null para ambos
+     * @param  int|null  $casoFiltrado  1 al 16, o null para todos
+     * @param  callable|null  $onProgress  Callback ($registroActual, $totalRegistros, $info)
+     * @return array{total_intentos: int, exitosos: int, fallidos: int, detalle: array}
+     */
+    public function ejecutarEtapaPaquetes(
+        int $repeticiones = 10,
+        ?int $pvFiltrado = null,
+        ?int $casoFiltrado = null,
+        ?callable $onProgress = null
+    ): array {
+        $casosDefinicion = [
+            1 => ['tipo' => 'envio', 'pv' => 1, 'motivo' => 1, 'desc' => 'Corte de Internet', 'cant' => 500, 'reps' => 10],
+            2 => ['tipo' => 'envio', 'pv' => 0, 'motivo' => 1, 'desc' => 'Corte de Internet', 'cant' => 1, 'reps' => 10],
+            3 => ['tipo' => 'envio', 'pv' => 1, 'motivo' => 2, 'desc' => 'Inaccesibilidad SIN', 'cant' => 500, 'reps' => 10],
+            4 => ['tipo' => 'envio', 'pv' => 0, 'motivo' => 2, 'desc' => 'Inaccesibilidad SIN', 'cant' => 1, 'reps' => 10],
+            5 => ['tipo' => 'envio', 'pv' => 1, 'motivo' => 3, 'desc' => 'Despliegue PV', 'cant' => 500, 'reps' => 10],
+            6 => ['tipo' => 'envio', 'pv' => 0, 'motivo' => 3, 'desc' => 'Despliegue PV', 'cant' => 1, 'reps' => 10],
+            7 => ['tipo' => 'envio', 'pv' => 1, 'motivo' => 4, 'desc' => 'Venta sin internet', 'cant' => 500, 'reps' => 10],
+            8 => ['tipo' => 'envio', 'pv' => 0, 'motivo' => 4, 'desc' => 'Venta sin internet', 'cant' => 1, 'reps' => 10],
+            9 => ['tipo' => 'envio', 'pv' => 1, 'motivo' => 5, 'desc' => 'Virus / Software', 'cant' => 500, 'reps' => 10],
+            10 => ['tipo' => 'envio', 'pv' => 0, 'motivo' => 5, 'desc' => 'Virus / Software', 'cant' => 1, 'reps' => 10],
+            11 => ['tipo' => 'envio', 'pv' => 1, 'motivo' => 6, 'desc' => 'Falla de Hardware', 'cant' => 500, 'reps' => 10],
+            12 => ['tipo' => 'envio', 'pv' => 0, 'motivo' => 6, 'desc' => 'Falla de Hardware', 'cant' => 1, 'reps' => 10],
+            13 => ['tipo' => 'envio', 'pv' => 1, 'motivo' => 7, 'desc' => 'Corte de Energía', 'cant' => 500, 'reps' => 10],
+            14 => ['tipo' => 'envio', 'pv' => 0, 'motivo' => 7, 'desc' => 'Corte de Energía', 'cant' => 1, 'reps' => 10],
+            15 => ['tipo' => 'validacion', 'pv' => 1, 'motivo' => null, 'desc' => 'Validación Estado Paquete (PV 1)', 'cant' => null, 'reps' => 70],
+            16 => ['tipo' => 'validacion', 'pv' => 0, 'motivo' => null, 'desc' => 'Validación Estado Paquete (PV 0)', 'cant' => null, 'reps' => 70],
+        ];
+
+        if ($casoFiltrado !== null && isset($casosDefinicion[$casoFiltrado])) {
+            $casos = [$casoFiltrado => $casosDefinicion[$casoFiltrado]];
+        } else {
+            $casos = $casosDefinicion;
+        }
+
+        if ($pvFiltrado !== null) {
+            $casos = array_filter($casos, fn ($c) => $c['pv'] === $pvFiltrado);
+        }
+
+        $totalRegistros = count($casos);
+        $registroIndex = 0;
+        $totalIntentos = 0;
+        $totalExitosos = 0;
+        $totalFallidos = 0;
+        $detalle = [];
+        $codigosRecepcionPv = [1 => [], 0 => []];
+
+        $urlApi = new UrlApiServicio;
+        $ambiente = (int) config('siat.codigo_ambiente', 2);
+        $modalidad = (int) config('siat.codigo_modalidad', 2);
+        $urlFacturacion = $urlApi->getUrlFacturacionCompraVenta($ambiente, $modalidad)->url_servicio;
+
+        foreach ($casos as $casoNum => $infoCaso) {
+            $registroIndex++;
+            $pv = $infoCaso['pv'];
+            $tipoOperacion = $infoCaso['tipo'];
+            $cantFacturas = $infoCaso['cant'];
+            $motivo = $infoCaso['motivo'];
+            $descCaso = $infoCaso['desc'];
+            $iteracionesCaso = $repeticiones ?: $infoCaso['reps'];
+
+            $contexto = $this->resolverContexto($pv);
+
+            if (! $contexto['success'] || ! $urlFacturacion) {
+                $msg = $contexto['message'] ?? 'URL de Facturación Compra Venta no configurada.';
+                $detalle[] = [
+                    'caso' => $casoNum,
+                    'descripcion' => $descCaso,
+                    'pv' => $pv,
+                    'exitosos' => 0,
+                    'fallidos' => $iteracionesCaso,
+                    'error' => $msg,
+                ];
+                $totalIntentos += $iteracionesCaso;
+                $totalFallidos += $iteracionesCaso;
+
+                continue;
+            }
+
+            $cufd = Cufd::where('sucursal_id', $contexto['sucursalId'])
+                ->where('punto_venta_id', $contexto['puntoVentaId'])
+                ->where('fecha_vigencia', '>', now())
+                ->latest('id')
+                ->first() ?? Cufd::where('sucursal_id', $contexto['sucursalId'])->latest('id')->first();
+
+            $exitososRegistro = 0;
+            $fallidosRegistro = 0;
+            $ultimoError = null;
+            $ultimoCodigoRecepcion = null;
+
+            // Para envíos, obtener un código de evento registrado para este motivo y PV
+            $codigoEvento = null;
+            if ($tipoOperacion === 'envio') {
+                $tipoModel = TipoEventoSignificativo::where('codigo_clasificador', $motivo)->first();
+                $eventoDb = EventoSignificativo::where('punto_venta_id', $contexto['puntoVentaId'])
+                    ->when($tipoModel, fn ($q) => $q->where('tipo_evento_significativo_id', $tipoModel->id))
+                    ->whereNotNull('codigo_recepcion')
+                    ->latest('id')
+                    ->first();
+                $codigoEvento = $eventoDb ? (int) $eventoDb->codigo_recepcion : null;
+            }
+
+            for ($i = 1; $i <= $iteracionesCaso; $i++) {
+                $totalIntentos++;
+                try {
+                    if ($tipoOperacion === 'envio') {
+                        // Construir archivo .tar.gz comprimido
+                        $tempDir = storage_path('app/temp_paquetes/'.uniqid('homol_'));
+                        if (! is_dir($tempDir)) {
+                            mkdir($tempDir, 0777, true);
+                        }
+                        $tarPath = $tempDir.'/paquete.tar';
+                        $gzPath = $tarPath.'.gz';
+
+                        $phar = new \PharData($tarPath);
+                        $facturaXml = Factura::where('productos_xml', 'like', '%<?xml%')->latest('id')->value('productos_xml')
+                            ?: '<?xml version="1.0" encoding="UTF-8"?><facturaElectronicaCompraVenta></facturaElectronicaCompraVenta>';
+                        for ($f = 1; $f <= $cantFacturas; $f++) {
+                            $phar->addFromString("factura_{$f}.xml", $facturaXml);
+                        }
+                        $phar->compress(\Phar::GZ);
+
+                        $gzBytes = file_get_contents($gzPath);
+                        $hashArchivo = hash('sha256', $gzBytes);
+                        $fechaEnvioIso = now('America/La_Paz')->format('Y-m-d\TH:i:s.000');
+
+                        @unlink($tarPath);
+                        @unlink($gzPath);
+                        @rmdir($tempDir);
+
+                        $respRaw = $this->siatController->recepcionPaqueteFactura(
+                            $contexto['token'],
+                            $urlFacturacion,
+                            $contexto['ambiente'],
+                            1, // codigoDocumentoSector = 1
+                            2, // fuera de linea = 2
+                            $contexto['modalidad'],
+                            $contexto['codigoPuntoVenta'],
+                            $contexto['codigoSistema'],
+                            $contexto['codigoSucursal'],
+                            $cufd->codigo,
+                            $contexto['cuis'],
+                            $contexto['nit'],
+                            1, // Con derecho a crédito fiscal
+                            $gzBytes,
+                            $fechaEnvioIso,
+                            $hashArchivo,
+                            null,
+                            $cantFacturas,
+                            $codigoEvento ?: 9953953
+                        );
+
+                        $resp = json_decode($respRaw, true);
+                        $resServicio = $resp['resultado']['RespuestaServicioFacturacion'] ?? [];
+                        $transaccion = $resServicio['transaccion'] ?? false;
+                        $codRecepPaquete = $resServicio['codigoRecepcion'] ?? null;
+
+                        if ($transaccion && $codRecepPaquete) {
+                            $exitososRegistro++;
+                            $totalExitosos++;
+                            $ultimoCodigoRecepcion = $codRecepPaquete;
+                            $codigosRecepcionPv[$pv][] = $codRecepPaquete;
+                        } else {
+                            $fallidosRegistro++;
+                            $totalFallidos++;
+                            $ultimoError = $resp['msg'] ?? ($resServicio['codigoDescripcion'] ?? 'Fallo en envío de paquete');
+                            if (! empty($resServicio['mensajesList'])) {
+                                $ultimoError .= ': '.json_encode($resServicio['mensajesList'], JSON_UNESCAPED_UNICODE);
+                            }
+                        }
+                    } else {
+                        // Operación: validacionRecepcionPaqueteFactura
+                        // Obtener código de recepción previo o fallback
+                        $codParaValidar = ! empty($codigosRecepcionPv[$pv])
+                            ? end($codigosRecepcionPv[$pv])
+                            : (PaqueteFactura::where('punto_venta_id', $contexto['puntoVentaId'])->latest('id')->value('codigo_recepcion') ?: 'b4cafe22-c74c-11f1-8817-e9075b2c26e4');
+
+                        $respRaw = $this->siatController->validacionRecepcionPaqueteFactura(
+                            $contexto['token'],
+                            $urlFacturacion,
+                            $contexto['ambiente'],
+                            1,
+                            $contexto['modalidad'],
+                            $contexto['codigoPuntoVenta'],
+                            $contexto['codigoSistema'],
+                            $contexto['codigoSucursal'],
+                            $cufd->codigo,
+                            $contexto['cuis'],
+                            $contexto['nit'],
+                            1,
+                            2, // fuera de linea = 2
+                            $codParaValidar
+                        );
+
+                        $resp = json_decode($respRaw, true);
+                        $resServicio = $resp['resultado']['RespuestaServicioFacturacion'] ?? [];
+                        $transaccion = $resServicio['transaccion'] ?? false;
+                        $codigoDescripcion = $resServicio['codigoDescripcion'] ?? null;
+
+                        if ($transaccion || $codigoDescripcion) {
+                            $exitososRegistro++;
+                            $totalExitosos++;
+                            $ultimoCodigoRecepcion = $codParaValidar;
+                        } else {
+                            $fallidosRegistro++;
+                            $totalFallidos++;
+                            $ultimoError = $resp['msg'] ?? 'Fallo en validación de paquete';
+                        }
+                    }
+                } catch (Exception $e) {
+                    $fallidosRegistro++;
+                    $totalFallidos++;
+                    $ultimoError = $e->getMessage();
+                }
+
+                if ($onProgress) {
+                    $onProgress($registroIndex, $totalRegistros, [
+                        'caso' => $casoNum,
+                        'tipo' => $tipoOperacion,
+                        'descripcion' => $descCaso,
+                        'pv' => $pv,
+                        'iteracion' => $i,
+                        'total_iteraciones' => $iteracionesCaso,
+                        'exitosos' => $exitososRegistro,
+                        'fallidos' => $fallidosRegistro,
+                        'codigo_recepcion' => $ultimoCodigoRecepcion,
+                        'error' => $ultimoError,
+                    ]);
+                }
+
+                usleep(100000); // Pausa anti-bloqueo 100 ms
+            }
+
+            $detalle[] = [
+                'caso' => $casoNum,
+                'descripcion' => $descCaso,
                 'pv' => $pv,
                 'exitosos' => $exitososRegistro,
                 'fallidos' => $fallidosRegistro,

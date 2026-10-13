@@ -141,6 +141,14 @@ class PermisoSeeder extends Seeder
                 'nombre' => 'sincronizacion.eventos.cerrar',
                 'descripcion' => 'Cerrar evento significativo y empaquetar facturas',
             ],
+            [
+                'nombre' => 'sincronizacion.paquetes.enviar',
+                'descripcion' => 'Empaquetar y enviar facturas de contingencia al SIAT',
+            ],
+            [
+                'nombre' => 'sincronizacion.paquetes.validar',
+                'descripcion' => 'Consultar y validar estado de paquetes de contingencia en el SIAT',
+            ],
 
             // ==========================================
             // 3. MÓDULO INVENTARIOS Y MEDICAMENTOS

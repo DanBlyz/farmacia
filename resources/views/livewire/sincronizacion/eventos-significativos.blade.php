@@ -294,12 +294,30 @@
 
                             <!-- Acciones -->
                             <td class="py-3 px-3.5 text-right">
-                                <button type="button" 
-                                        wire:click="verDetalle({{ $ev->id }})"
-                                        class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs transition duration-150 cursor-pointer inline-flex items-center gap-1.5">
-                                    <i class="fas fa-eye text-teal-500 text-xs"></i>
-                                    <span>Ver</span>
-                                </button>
+                                <div class="flex items-center justify-end gap-1.5">
+                                    <button type="button" 
+                                            wire:click="verDetalle({{ $ev->id }})"
+                                            title="Ver Detalle"
+                                            class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs transition duration-150 cursor-pointer inline-flex items-center gap-1.5">
+                                        <i class="fas fa-eye text-teal-500 text-xs"></i>
+                                        <span>Ver</span>
+                                    </button>
+
+                                    @permiso('sincronizacion.paquetes.enviar')
+                                    <button type="button" 
+                                            wire:click="abrirModalPaquete({{ $ev->id }})"
+                                            title="Gestionar y Regularizar Paquetes de Facturas (Fase VI)"
+                                            class="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-semibold text-xs transition duration-150 cursor-pointer inline-flex items-center gap-1.5">
+                                        <i class="fas fa-boxes-packing text-amber-600 dark:text-amber-400 text-xs"></i>
+                                        <span>Paquetes</span>
+                                        @if($ev->paquetes->count() > 0)
+                                            <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-white leading-none">
+                                                {{ $ev->paquetes->count() }}
+                                            </span>
+                                        @endif
+                                    </button>
+                                    @endpermiso
+                                </div>
                             </td>
                         </tr>
                     @empty
@@ -585,6 +603,280 @@
                 <div class="bg-slate-50 dark:bg-slate-800/80 px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end">
                     <button type="button" 
                             wire:click="cerrarModalDetalle" 
+                            class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs cursor-pointer">
+                        Cerrar
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+    @endif
+
+    <!-- ========================================================================= -->
+    <!-- MODAL DE EMPAQUETADO Y REGULARIZACIÓN DE PAQUETES (FASE VI SIAT) -->
+    <!-- ========================================================================= -->
+    @if($showPaqueteModal && $eventoPaquete)
+    <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title-paquete" role="dialog" aria-modal="true">
+        <!-- Overlay oscuro -->
+        <div class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 transition-opacity" 
+             wire:click="cerrarModalPaquete"></div>
+
+        <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
+            <div class="relative transform overflow-hidden rounded-2xl bg-white dark:bg-slate-900 text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-4xl border border-slate-200 dark:border-slate-800">
+                
+                <!-- Cabecera del Modal -->
+                <div class="bg-slate-50 dark:bg-slate-800/80 px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center text-white shadow-sm shrink-0">
+                            <i class="fas fa-boxes-packing text-base"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-bold text-slate-800 dark:text-white" id="modal-title-paquete">
+                                Emisión y Regularización de Paquetes (Etapa VI SIAT)
+                            </h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">
+                                Transmisión TAR.GZ de facturas en contingencia y validación de estado fiscal ante el SIN
+                            </p>
+                        </div>
+                    </div>
+                    <button type="button" 
+                            wire:click="cerrarModalPaquete" 
+                            class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
+                        <i class="fas fa-times text-base"></i>
+                    </button>
+                </div>
+
+                <!-- Contenido -->
+                <div class="p-6 space-y-6 text-xs max-h-[75vh] overflow-y-auto">
+
+                    <!-- Tarjeta de Contexto del Evento -->
+                    <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-4 gap-3">
+                        <div>
+                            <span class="text-slate-400 block font-medium text-[11px]">Punto de Venta</span>
+                            <span class="font-bold text-slate-800 dark:text-white text-xs">
+                                PV {{ $eventoPaquete->puntoVenta?->codigo }} - {{ $eventoPaquete->puntoVenta?->nombre }}
+                            </span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 block font-medium text-[11px]">Motivo del Evento</span>
+                            <span class="font-bold text-slate-800 dark:text-white text-xs truncate block" title="{{ $eventoPaquete->tipoEvento?->descripcion }}">
+                                Cód {{ $eventoPaquete->tipoEvento?->codigo_clasificador }}: {{ $eventoPaquete->tipoEvento?->descripcion }}
+                            </span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 block font-medium text-[11px]">Intervalo Contingencia</span>
+                            <span class="font-mono text-slate-700 dark:text-slate-300 text-[11px] block">
+                                {{ \Carbon\Carbon::parse($eventoPaquete->fecha_ini)->format('d/m H:i') }} &rarr; {{ \Carbon\Carbon::parse($eventoPaquete->fecha_fin)->format('d/m H:i') }}
+                            </span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 block font-medium text-[11px]">Cód. Recepción Evento</span>
+                            <span class="font-mono font-bold text-teal-600 dark:text-teal-400 text-xs block">
+                                {{ $eventoPaquete->codigo_recepcion ?? 'Sin código' }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Sección 1: Facturas en Contingencia Pendientes de Empaquetar -->
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <h4 class="font-bold text-slate-800 dark:text-white text-sm">
+                                    Facturas en Contingencia para Empaquetar
+                                </h4>
+                                <span class="px-2 py-0.5 rounded-full text-[11px] font-bold {{ $facturasContingencia->count() > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' }}">
+                                    {{ $facturasContingencia->count() }} pendientes
+                                </span>
+                            </div>
+
+                            @if($facturasContingencia->count() > 0)
+                                @permiso('sincronizacion.paquetes.enviar')
+                                <button type="button" 
+                                        wire:click="enviarPaquete"
+                                        wire:loading.attr="disabled"
+                                        class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs shadow-sm transition duration-150 flex items-center gap-2 cursor-pointer disabled:opacity-50">
+                                    <span wire:loading.remove wire:target="enviarPaquete" class="flex items-center gap-2">
+                                        <i class="fas fa-file-zipper text-xs"></i>
+                                        <span>Generar Paquete TAR.GZ y Enviar a SIAT</span>
+                                    </span>
+                                    <span wire:loading wire:target="enviarPaquete" class="flex items-center gap-2">
+                                        <i class="fas fa-spinner fa-spin text-xs"></i>
+                                        <span>Empaquetando y Transmitiendo...</span>
+                                    </span>
+                                </button>
+                                @endpermiso
+                            @endif
+                        </div>
+
+                        @if($facturasContingencia->count() > 0)
+                            <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 max-h-56 overflow-y-auto">
+                                <table class="w-full text-left border-collapse text-xs">
+                                    <thead>
+                                        <tr class="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 font-bold uppercase tracking-wider text-[10px]">
+                                            <th class="py-2.5 px-3">N° Factura</th>
+                                            <th class="py-2.5 px-3">Fecha y Hora</th>
+                                            <th class="py-2.5 px-3">Cliente / NIT</th>
+                                            <th class="py-2.5 px-3 text-right">Total (Bs)</th>
+                                            <th class="py-2.5 px-3 text-center">Estado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                        @foreach($facturasContingencia as $fac)
+                                            <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                                                <td class="py-2 px-3 font-mono font-bold text-slate-800 dark:text-white">
+                                                    #{{ $fac->numero_factura }}
+                                                </td>
+                                                <td class="py-2 px-3 text-slate-600 dark:text-slate-300 font-mono text-[11px]">
+                                                    {{ \Carbon\Carbon::parse($fac->fecha)->format('d/m/Y H:i:s') }}
+                                                </td>
+                                                <td class="py-2 px-3">
+                                                    <span class="font-semibold text-slate-800 dark:text-slate-200 block truncate max-w-xs">{{ $fac->razon_social ?: ($fac->cliente?->razon_social ?? 'S/N') }}</span>
+                                                    <span class="text-[10px] text-slate-400 font-mono">NIT/CI: {{ $fac->nit }}</span>
+                                                </td>
+                                                <td class="py-2 px-3 text-right font-bold text-slate-800 dark:text-white font-mono">
+                                                    Bs. {{ number_format($fac->total, 2) }}
+                                                </td>
+                                                <td class="py-2 px-3 text-center">
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                                                        {{ $fac->estado }}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @else
+                            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800 text-center text-slate-500 dark:text-slate-400">
+                                <i class="fas fa-check-circle text-emerald-500 text-lg mb-1 block"></i>
+                                <span class="font-medium">No existen facturas en contingencia pendientes de envío para este evento.</span>
+                                <p class="text-[11px] text-slate-400 mt-0.5">
+                                    Todas las facturas correspondientes ya fueron regularizadas o no se emitieron ventas fuera de línea.
+                                </p>
+                            </div>
+                        @endif
+                    </div>
+
+                    <!-- Sección 2: Paquetes Transmitidos -->
+                    <div class="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+                        <div class="flex items-center justify-between">
+                            <h4 class="font-bold text-slate-800 dark:text-white text-sm">
+                                Historial de Paquetes Transmitidos
+                            </h4>
+                            <span class="text-xs text-slate-400">
+                                {{ $eventoPaquete->paquetes->count() }} paquetes registrados
+                            </span>
+                        </div>
+
+                        @if($eventoPaquete->paquetes->count() > 0)
+                            <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                                <table class="w-full text-left border-collapse text-xs">
+                                    <thead>
+                                        <tr class="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 font-bold uppercase tracking-wider text-[10px]">
+                                            <th class="py-2.5 px-3">Fecha y Hora</th>
+                                            <th class="py-2.5 px-3">Cód. Recepción Paquete</th>
+                                            <th class="py-2.5 px-3 text-center">Cant. Facturas</th>
+                                            <th class="py-2.5 px-3 text-center">Estado SIAT</th>
+                                            <th class="py-2.5 px-3 text-right">Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                        @foreach($eventoPaquete->paquetes as $paq)
+                                            <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                                                <td class="py-2.5 px-3 text-slate-600 dark:text-slate-300 font-mono text-[11px]">
+                                                    {{ $paq->fecha_envio ? \Carbon\Carbon::parse($paq->fecha_envio)->format('d/m/Y H:i:s') : $paq->created_at->format('d/m/Y H:i:s') }}
+                                                    <span class="text-[10px] text-slate-400 block">Por: {{ $paq->usuarioCreador?->name ?? 'Sistema' }}</span>
+                                                </td>
+                                                <td class="py-2.5 px-3 font-mono font-bold text-slate-800 dark:text-slate-200">
+                                                    {{ $paq->codigo_recepcion }}
+                                                </td>
+                                                <td class="py-2.5 px-3 text-center font-bold text-slate-800 dark:text-white">
+                                                    {{ $paq->cantidad_facturas }}
+                                                </td>
+                                                <td class="py-2.5 px-3 text-center">
+                                                    @if($paq->codigo_estado == 908 || $paq->estado === 'VALIDADA')
+                                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>
+                                                            908 VALIDADA
+                                                        </span>
+                                                    @elseif($paq->codigo_estado == 901 || $paq->estado === 'PENDIENTE')
+                                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                                                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5 animate-pulse"></span>
+                                                            901 PENDIENTE
+                                                        </span>
+                                                    @else
+                                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
+                                                            {{ $paq->codigo_estado }} {{ $paq->estado }}
+                                                        </span>
+                                                    @endif
+                                                </td>
+                                                <td class="py-2.5 px-3 text-right">
+                                                    @permiso('sincronizacion.paquetes.validar')
+                                                    <button type="button" 
+                                                            wire:click="validarPaquete({{ $paq->id }})"
+                                                            wire:loading.attr="disabled"
+                                                            wire:target="validarPaquete({{ $paq->id }})"
+                                                            class="px-2.5 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 font-semibold text-xs transition duration-150 cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50">
+                                                        <span wire:loading.remove wire:target="validarPaquete({{ $paq->id }})" class="flex items-center gap-1.5">
+                                                            <i class="fas fa-rotate text-teal-600 text-[10px]"></i>
+                                                            <span>Validar en SIAT</span>
+                                                        </span>
+                                                        <span wire:loading wire:target="validarPaquete({{ $paq->id }})" class="flex items-center gap-1.5">
+                                                            <i class="fas fa-spinner fa-spin text-teal-600 text-[10px]"></i>
+                                                            <span>Consultando...</span>
+                                                        </span>
+                                                    </button>
+                                                    @endpermiso
+                                                </td>
+                                            </tr>
+                                            <!-- Facturas asociadas a este paquete -->
+                                            @if($paq->facturas && $paq->facturas->count() > 0)
+                                                <tr class="bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800">
+                                                    <td colspan="5" class="py-2.5 px-4 text-xs">
+                                                        <div class="flex items-center gap-2 mb-1.5 text-slate-500 dark:text-slate-400 font-medium text-[11px]">
+                                                            <i class="fas fa-file-invoice text-teal-600 dark:text-teal-400"></i>
+                                                            <span>Facturas incluidas en este paquete ({{ $paq->facturas->count() }}):</span>
+                                                        </div>
+                                                        <div class="flex flex-wrap items-center gap-2">
+                                                            @foreach($paq->facturas as $facPaq)
+                                                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono border {{ $facPaq->estado === 'VALIDADA' ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800' }}">
+                                                                    <strong>#{{ $facPaq->numero_factura }}</strong>
+                                                                    <span class="text-slate-500 dark:text-slate-400 font-sans text-[11px]">Bs. {{ number_format($facPaq->total, 2) }}</span>
+                                                                    <span class="text-[10px] font-sans font-bold px-1.5 py-0.2 rounded-full {{ $facPaq->estado === 'VALIDADA' ? 'bg-emerald-200 dark:bg-emerald-800 text-emerald-900 dark:text-emerald-100' : 'bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100' }}">
+                                                                        {{ $facPaq->estado }}
+                                                                    </span>
+                                                                </span>
+                                                            @endforeach
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            @endif
+                                            @if(!empty($paq->mensajes_validacion))
+                                                <tr class="bg-rose-50/50 dark:bg-rose-950/20">
+                                                    <td colspan="5" class="py-2 px-3 text-rose-700 dark:text-rose-300 text-[11px]">
+                                                        <strong>Observaciones SIN:</strong> 
+                                                        {{ is_array($paq->mensajes_validacion) ? json_encode($paq->mensajes_validacion, JSON_UNESCAPED_UNICODE) : $paq->mensajes_validacion }}
+                                                    </td>
+                                                </tr>
+                                            @endif
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @else
+                            <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800 text-center text-slate-400">
+                                Ningún paquete generado para este evento hasta el momento.
+                            </div>
+                        @endif
+                    </div>
+
+                </div>
+
+                <!-- Footer Modal -->
+                <div class="bg-slate-50 dark:bg-slate-800/80 px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end">
+                    <button type="button" 
+                            wire:click="cerrarModalPaquete" 
                             class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs cursor-pointer">
                         Cerrar
                     </button>

@@ -38,7 +38,7 @@ class Pos extends Component
 
     public ?int $selectedProductoId = null;
 
-    public ?int $selectedLoteId = null;
+    public mixed $selectedLoteId = 'AUTO_FEFO';
 
     public float|string $cantidadAgregar = 1;
 
@@ -138,22 +138,13 @@ class Pos extends Component
         $this->cantidadAgregar = 1;
         $this->descuentoItemAgregar = 0;
 
-        // Buscar lotes vigentes de este producto en la sucursal del cajero ordenados por FEFO
-        $primerLote = Lote::where('producto_id', $prod->id)
-            ->where('sucursal_id', $this->sucursalId)
-            ->where('stock_actual', '>', 0)
-            ->where('fecha_vencimiento', '>=', now()->toDateString())
-            ->whereIn('estado', ['ACTIVO', 'OPTIMO', 'PROXIMO_VENCER'])
-            ->orderBy('fecha_vencimiento', 'asc')
-            ->first();
-
-        $this->selectedLoteId = $primerLote?->id;
+        $this->selectedLoteId = 'AUTO_FEFO';
     }
 
     public function cancelarSeleccionProducto(): void
     {
         $this->selectedProductoId = null;
-        $this->selectedLoteId = null;
+        $this->selectedLoteId = 'AUTO_FEFO';
         $this->cantidadAgregar = 1;
         $this->descuentoItemAgregar = 0;
     }
@@ -168,68 +159,172 @@ class Pos extends Component
 
         $this->validate([
             'selectedProductoId' => 'required|exists:productos,id',
-            'selectedLoteId' => 'required|exists:lotes,id',
             'cantidadAgregar' => 'required|numeric|min:0.1',
             'descuentoItemAgregar' => 'nullable|numeric|min:0',
         ], [
-            'selectedLoteId.required' => 'Debe seleccionar un lote con existencia disponible.',
             'cantidadAgregar.min' => 'La cantidad debe ser mayor a cero.',
         ]);
 
         $prod = Producto::findOrFail($this->selectedProductoId);
-        $lote = Lote::where('id', $this->selectedLoteId)
-            ->where('sucursal_id', $this->sucursalId)
-            ->firstOrFail();
+        $cantRequerida = (float) $this->cantidadAgregar;
+        $descTotal = (float) ($this->descuentoItemAgregar ?: 0);
 
-        $cant = (float) $this->cantidadAgregar;
-        $desc = (float) $this->descuentoItemAgregar;
-        $precio = (float) ($prod->precio_venta > 0 ? $prod->precio_venta : ($lote->precio_venta > 0 ? $lote->precio_venta : 0));
+        // REGLA FUNDAMENTAL DE NEGOCIO: El precio de venta a cobrar es SIEMPRE el precio actualizado del producto (productos.precio_venta).
+        // Los lotes aportan trazabilidad física y caducidad, pero NUNCA el precio de venta final si difiere del maestro.
+        $precioUnitarioVenta = (float) ($prod->precio_venta > 0 ? $prod->precio_venta : 0);
 
-        if ($desc >= ($precio * $cant)) {
-            $this->addError('descuentoItemAgregar', 'El descuento no puede ser igual o mayor al total del ítem.');
-
-            return;
+        // Mapear existencias actualmente en el carrito por lote
+        $stockEnCarritoPorLote = [];
+        foreach ($this->carrito as $item) {
+            $lId = (int) $item['lote_id'];
+            $stockEnCarritoPorLote[$lId] = ($stockEnCarritoPorLote[$lId] ?? 0) + (float) $item['cantidad'];
         }
 
-        // Validar si ya está en carrito
-        $enCarritoIndex = null;
-        foreach ($this->carrito as $index => $item) {
-            if ($item['producto_id'] === $prod->id && $item['lote_id'] === $lote->id) {
-                $enCarritoIndex = $index;
-                break;
+        $esAutoFefo = empty($this->selectedLoteId) || $this->selectedLoteId === 'AUTO_FEFO';
+
+        if ($esAutoFefo) {
+            // Obtener todos los lotes vigentes de esta sucursal ordenados por FEFO (vencimiento más próximo primero)
+            $lotesDisponibles = Lote::where('producto_id', $prod->id)
+                ->where('sucursal_id', $this->sucursalId)
+                ->where('stock_actual', '>', 0)
+                ->where('fecha_vencimiento', '>=', now()->toDateString())
+                ->whereIn('estado', ['ACTIVO', 'OPTIMO', 'PROXIMO_VENCER'])
+                ->orderBy('fecha_vencimiento', 'asc')
+                ->get();
+
+            if ($lotesDisponibles->isEmpty()) {
+                $this->addError('cantidadAgregar', 'No existen lotes vigentes con existencia disponible para este producto en la sucursal.');
+
+                return;
             }
-        }
 
-        $cantTotalRequerida = $enCarritoIndex !== null ? ($this->carrito[$enCarritoIndex]['cantidad'] + $cant) : $cant;
+            // Calcular stock real disponible restante entre todos los lotes
+            $stockTotalReal = 0;
+            foreach ($lotesDisponibles as $l) {
+                $stockTotalReal += max(0, (float) $l->stock_actual - ($stockEnCarritoPorLote[$l->id] ?? 0));
+            }
 
-        if ($cantTotalRequerida > (float) $lote->stock_actual) {
-            $this->addError('cantidadAgregar', "Existencia insuficiente. El lote dispone de {$lote->stock_actual} unidades.");
+            if ($cantRequerida > $stockTotalReal) {
+                $this->addError('cantidadAgregar', "Existencia insuficiente. Solo dispone de {$stockTotalReal} unidades entre todos los lotes vigentes de la sucursal.");
 
-            return;
-        }
+                return;
+            }
 
-        $subtotal = max(0, ($precio * $cant) - $desc);
+            if ($descTotal >= ($precioUnitarioVenta * $cantRequerida)) {
+                $this->addError('descuentoItemAgregar', 'El descuento no puede ser igual o mayor al total del ítem.');
 
-        if ($enCarritoIndex !== null) {
-            $nuevaCant = $this->carrito[$enCarritoIndex]['cantidad'] + $cant;
-            $nuevoDesc = $this->carrito[$enCarritoIndex]['descuento'] + $desc;
-            $this->carrito[$enCarritoIndex]['cantidad'] = $nuevaCant;
-            $this->carrito[$enCarritoIndex]['descuento'] = $nuevoDesc;
-            $this->carrito[$enCarritoIndex]['total'] = max(0, ($precio * $nuevaCant) - $nuevoDesc);
+                return;
+            }
+
+            $cantRestante = $cantRequerida;
+            $descuentoPorUnidad = $cantRequerida > 0 ? ($descTotal / $cantRequerida) : 0;
+
+            foreach ($lotesDisponibles as $lote) {
+                $disp = max(0, (float) $lote->stock_actual - ($stockEnCarritoPorLote[$lote->id] ?? 0));
+                if ($disp <= 0) {
+                    continue;
+                }
+
+                $tomar = min($cantRestante, $disp);
+                $descLote = round($descuentoPorUnidad * $tomar, 2);
+                $precioItem = $precioUnitarioVenta > 0 ? $precioUnitarioVenta : (float) $lote->precio_venta;
+                $subtotalLote = max(0, round(($precioItem * $tomar) - $descLote, 2));
+
+                // Buscar si este lote específico ya está en el carrito
+                $idxEncontrado = null;
+                foreach ($this->carrito as $idx => $it) {
+                    if ($it['producto_id'] === $prod->id && $it['lote_id'] === $lote->id) {
+                        $idxEncontrado = $idx;
+                        break;
+                    }
+                }
+
+                if ($idxEncontrado !== null) {
+                    $nuevaCant = $this->carrito[$idxEncontrado]['cantidad'] + $tomar;
+                    $nuevoDesc = $this->carrito[$idxEncontrado]['descuento'] + $descLote;
+                    $this->carrito[$idxEncontrado]['cantidad'] = $nuevaCant;
+                    $this->carrito[$idxEncontrado]['descuento'] = $nuevoDesc;
+                    $this->carrito[$idxEncontrado]['precio'] = $precioItem;
+                    $this->carrito[$idxEncontrado]['total'] = max(0, round(($precioItem * $nuevaCant) - $nuevoDesc, 2));
+                } else {
+                    $this->carrito[] = [
+                        'producto_id' => $prod->id,
+                        'lote_id' => $lote->id,
+                        'nombre' => $prod->nombre,
+                        'codigo' => $prod->codigo,
+                        'numero_lote' => $lote->numero_lote,
+                        'fecha_vencimiento' => Carbon::parse($lote->fecha_vencimiento)->format('d/m/Y'),
+                        'precio' => $precioItem,
+                        'cantidad' => $tomar,
+                        'descuento' => $descLote,
+                        'total' => $subtotalLote,
+                        'stock_max' => (float) $lote->stock_actual,
+                    ];
+                }
+
+                $cantRestante -= $tomar;
+                if ($cantRestante <= 0) {
+                    break;
+                }
+            }
         } else {
-            $this->carrito[] = [
-                'producto_id' => $prod->id,
-                'lote_id' => $lote->id,
-                'nombre' => $prod->nombre,
-                'codigo' => $prod->codigo,
-                'numero_lote' => $lote->numero_lote,
-                'fecha_vencimiento' => Carbon::parse($lote->fecha_vencimiento)->format('d/m/Y'),
-                'precio' => $precio,
-                'cantidad' => $cant,
-                'descuento' => $desc,
-                'total' => $subtotal,
-                'stock_max' => (float) $lote->stock_actual,
-            ];
+            // Despacho desde un lote específico seleccionado manualmente
+            $lote = Lote::where('id', (int) $this->selectedLoteId)
+                ->where('sucursal_id', $this->sucursalId)
+                ->first();
+
+            if (! $lote) {
+                $this->addError('selectedLoteId', 'El lote seleccionado no existe.');
+
+                return;
+            }
+
+            $dispLote = max(0, (float) $lote->stock_actual - ($stockEnCarritoPorLote[$lote->id] ?? 0));
+            if ($cantRequerida > $dispLote) {
+                $this->addError('cantidadAgregar', "Existencia insuficiente en el lote {$lote->numero_lote}. Solo dispone de {$dispLote} unidades.");
+
+                return;
+            }
+
+            $precioItem = $precioUnitarioVenta > 0 ? $precioUnitarioVenta : (float) $lote->precio_venta;
+            if ($descTotal >= ($precioItem * $cantRequerida)) {
+                $this->addError('descuentoItemAgregar', 'El descuento no puede ser igual o mayor al total del ítem.');
+
+                return;
+            }
+
+            $subtotalLote = max(0, round(($precioItem * $cantRequerida) - $descTotal, 2));
+
+            $idxEncontrado = null;
+            foreach ($this->carrito as $idx => $it) {
+                if ($it['producto_id'] === $prod->id && $it['lote_id'] === $lote->id) {
+                    $idxEncontrado = $idx;
+                    break;
+                }
+            }
+
+            if ($idxEncontrado !== null) {
+                $nuevaCant = $this->carrito[$idxEncontrado]['cantidad'] + $cantRequerida;
+                $nuevoDesc = $this->carrito[$idxEncontrado]['descuento'] + $descTotal;
+                $this->carrito[$idxEncontrado]['cantidad'] = $nuevaCant;
+                $this->carrito[$idxEncontrado]['descuento'] = $nuevoDesc;
+                $this->carrito[$idxEncontrado]['precio'] = $precioItem;
+                $this->carrito[$idxEncontrado]['total'] = max(0, round(($precioItem * $nuevaCant) - $nuevoDesc, 2));
+            } else {
+                $this->carrito[] = [
+                    'producto_id' => $prod->id,
+                    'lote_id' => $lote->id,
+                    'nombre' => $prod->nombre,
+                    'codigo' => $prod->codigo,
+                    'numero_lote' => $lote->numero_lote,
+                    'fecha_vencimiento' => Carbon::parse($lote->fecha_vencimiento)->format('d/m/Y'),
+                    'precio' => $precioItem,
+                    'cantidad' => $cantRequerida,
+                    'descuento' => $descTotal,
+                    'total' => $subtotalLote,
+                    'stock_max' => (float) $lote->stock_actual,
+                ];
+            }
         }
 
         $this->cancelarSeleccionProducto();
@@ -258,7 +353,7 @@ class Pos extends Component
         }
 
         $item['cantidad'] = $nuevaCantidad;
-        $item['total'] = max(0, ($item['precio'] * $nuevaCantidad) - $item['descuento']);
+        $item['total'] = max(0, round(($item['precio'] * $nuevaCantidad) - $item['descuento'], 2));
         $this->actualizarMontosPago();
     }
 
@@ -289,8 +384,8 @@ class Pos extends Component
     public function actualizarMontosPago(): void
     {
         $total = $this->calcularTotal();
-        // Por defecto, sugerir pago en efectivo por el total
-        $this->montoEfectivo = $total;
+        // Por defecto, sugerir pago en efectivo por el total formateado a 2 decimales exactos
+        $this->montoEfectivo = number_format($total, 2, '.', '');
         $this->montoQr = 0;
         $this->montoTransferencia = 0;
     }
@@ -302,7 +397,7 @@ class Pos extends Component
             $sum += (float) $item['total'];
         }
 
-        return $sum;
+        return round($sum, 2);
     }
 
     public function calcularTotal(): float
@@ -310,7 +405,26 @@ class Pos extends Component
         $subtotal = $this->calcularSubtotal();
         $descGen = (float) $this->descuentoGeneral;
 
-        return max(0, $subtotal - $descGen);
+        return max(0, round($subtotal - $descGen, 2));
+    }
+
+    public function ajustarSaldoMetodo(string $metodo): void
+    {
+        $total = round($this->calcularTotal(), 2);
+        $ef = round((float) $this->montoEfectivo, 2);
+        $qr = round((float) $this->montoQr, 2);
+        $tr = round((float) $this->montoTransferencia, 2);
+
+        if ($metodo === 'efectivo') {
+            $restante = max(0, round($total - ($qr + $tr), 2));
+            $this->montoEfectivo = number_format($restante, 2, '.', '');
+        } elseif ($metodo === 'qr') {
+            $restante = max(0, round($total - ($ef + $tr), 2));
+            $this->montoQr = number_format($restante, 2, '.', '');
+        } elseif ($metodo === 'transferencia') {
+            $restante = max(0, round($total - ($ef + $qr), 2));
+            $this->montoTransferencia = number_format($restante, 2, '.', '');
+        }
     }
 
     public function seleccionarCliente(int $id): void
@@ -388,20 +502,20 @@ class Pos extends Component
             return;
         }
 
-        $totalAPagar = $this->calcularTotal();
-        $pagoEf = (float) $this->montoEfectivo;
-        $pagoQr = (float) $this->montoQr;
-        $pagoTransf = (float) $this->montoTransferencia;
-        $totalPagado = $pagoEf + $pagoQr + $pagoTransf;
+        $totalAPagar = round($this->calcularTotal(), 2);
+        $pagoEf = round((float) $this->montoEfectivo, 2);
+        $pagoQr = round((float) $this->montoQr, 2);
+        $pagoTransf = round((float) $this->montoTransferencia, 2);
+        $totalPagado = round($pagoEf + $pagoQr + $pagoTransf, 2);
 
-        if ($totalPagado < $totalAPagar) {
-            $falta = $totalAPagar - $totalPagado;
+        if ($totalPagado < round($totalAPagar - 0.009, 2)) {
+            $falta = max(0, round($totalAPagar - $totalPagado, 2));
             $this->dispatch('swal-alert', icon: 'warning', title: 'Pago Insuficiente', message: 'El total pagado no cubre el monto de la compra. Faltan Bs. '.number_format($falta, 2));
 
             return;
         }
 
-        $cambioEfectivo = max(0, $pagoEf - max(0, $totalAPagar - ($pagoQr + $pagoTransf)));
+        $cambioEfectivo = max(0, round($pagoEf - max(0, $totalAPagar - ($pagoQr + $pagoTransf)), 2));
 
         // Resolver Punto de Venta y Sucursal
         $caja = Caja::findOrFail($this->cajaId);

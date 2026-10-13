@@ -8,6 +8,7 @@ use App\Models\Cuis;
 use App\Models\EventoSignificativo;
 use App\Models\Factura;
 use App\Models\LeyendaFactura;
+use App\Models\PaqueteFactura;
 use App\Models\PuntoVenta;
 use App\Models\Sucursal;
 use App\Models\TipoEventoSignificativo;
@@ -662,6 +663,358 @@ class SiatFacturacionService
                 'success' => false,
                 'codigo_recepcion' => null,
                 'mensaje' => 'Excepción SOAP: '.$e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Construye y regenera el documento XML de una factura existente a partir de su modelo y relaciones.
+     */
+    public function construirXmlFacturaCompraVenta(Factura $factura): string
+    {
+        $factura->loadMissing(['detalles.producto', 'sucursal', 'puntoVenta', 'cufd', 'cliente', 'usuarioCreador']);
+
+        $detalles = $factura->detalles;
+        if ($detalles->isEmpty()) {
+            $detalles = [
+                (object) [
+                    'producto' => null,
+                    'producto_id' => 1,
+                    'nombre_producto' => 'Venta Farmacia en Mostrador',
+                    'cantidad' => 1,
+                    'precio' => (float) $factura->total,
+                    'descuento' => (float) ($factura->descuento_adicional ?? 0),
+                    'total' => (float) $factura->total,
+                ],
+            ];
+        }
+
+        $sucursal = $factura->sucursal ?? Sucursal::where('codigo_sucursal', 0)->first() ?? Sucursal::first();
+        if (! $sucursal) {
+            $sucursal = new Sucursal([
+                'codigo_sucursal' => 0,
+                'nombre' => 'CASA MATRIZ',
+                'direccion' => 'Av. Principal Central Farma',
+            ]);
+        }
+
+        $puntoVenta = $factura->puntoVenta ?? PuntoVenta::where('sucursal_id', $sucursal->id ?? null)->first();
+        if (! $puntoVenta) {
+            $puntoVenta = new PuntoVenta([
+                'codigo' => 0,
+                'nombre' => 'Punto de Venta Central',
+            ]);
+        }
+
+        $cufd = $factura->cufd ?? Cufd::where('sucursal_id', $sucursal->id ?? 0)
+            ->where('punto_venta_id', $puntoVenta->id ?? 0)
+            ->latest('id')
+            ->first();
+
+        if (! $cufd) {
+            $cufd = new Cufd([
+                'codigo' => $factura->cuf ?: 'B0A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q7R8S9T0',
+                'codigo_control' => 'CONTROL123456',
+                'direccion' => $sucursal->direccion ?: 'Av. Principal Central',
+            ]);
+        }
+
+        $usuarioNombre = $factura->usuarioCreador?->name ?: 'cajero';
+
+        $xml = $this->generarXmlFactura($factura, $detalles, $cufd, $sucursal, $puntoVenta, $usuarioNombre);
+
+        if ($factura->exists && empty($factura->productos_xml)) {
+            $factura->productos_xml = $xml;
+            $factura->saveQuietly();
+        }
+
+        return $xml;
+    }
+
+    /**
+     * Construye un archivo .tar.gz conteniendo los XMLs de las facturas proporcionadas.
+     *
+     * @param  iterable<Factura>  $facturas
+     * @return array{bytes: string, hash: string, cantidad: int, error: ?string}
+     */
+    public function construirPaqueteTarGz(iterable $facturas): array
+    {
+        $tempDir = storage_path('app/temp_paquetes/'.uniqid('pkg_'));
+        if (! is_dir($tempDir)) {
+            mkdir($tempDir, 0777, true);
+        }
+
+        $tarPath = $tempDir.'/paquete.tar';
+        $gzPath = $tarPath.'.gz';
+
+        try {
+            $phar = new \PharData($tarPath);
+            $contador = 0;
+
+            foreach ($facturas as $factura) {
+                $contador++;
+                $xml = $factura->productos_xml;
+                if (! $xml) {
+                    $xml = $this->construirXmlFacturaCompraVenta($factura);
+                }
+
+                $nombreXml = sprintf('factura_%s_%d.xml', $factura->numero_factura ?: $contador, $factura->id);
+                $phar->addFromString($nombreXml, $xml);
+            }
+
+            if ($contador === 0) {
+                return ['bytes' => '', 'hash' => '', 'cantidad' => 0, 'error' => 'No hay facturas para empaquetar.'];
+            }
+
+            $phar->compress(\Phar::GZ);
+
+            $gzBytes = file_get_contents($gzPath);
+            $hash = hash('sha256', $gzBytes);
+
+            return [
+                'bytes' => $gzBytes,
+                'hash' => $hash,
+                'cantidad' => $contador,
+                'error' => null,
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'bytes' => '',
+                'hash' => '',
+                'cantidad' => 0,
+                'error' => 'Error al comprimir TAR.GZ: '.$e->getMessage(),
+            ];
+        } finally {
+            @unlink($tarPath);
+            @unlink($gzPath);
+            @rmdir($tempDir);
+        }
+    }
+
+    /**
+     * Envía un paquete de facturas en contingencia al WebService SIAT.
+     */
+    public function enviarPaqueteContingencia(int $eventoSignificativoId, ?array $facturaIds = null): array
+    {
+        $evento = EventoSignificativo::with(['puntoVenta.sucursal', 'cufdActivo', 'cufdEvento'])->find($eventoSignificativoId);
+        if (! $evento) {
+            return ['success' => false, 'mensaje' => 'Evento Significativo no encontrado.'];
+        }
+
+        if (empty($evento->codigo_recepcion)) {
+            return ['success' => false, 'mensaje' => 'El evento significativo no cuenta con código de recepción oficial del SIAT.'];
+        }
+
+        $query = Factura::where('punto_venta_id', $evento->punto_venta_id)
+            ->where('estado', 'PENDIENTE_ENVIO');
+
+        if ($facturaIds && count($facturaIds) > 0) {
+            $query->whereIn('id', $facturaIds);
+        } else {
+            $query->where(function ($q) use ($evento) {
+                $q->where('evento_significativo_id', $evento->id)
+                    ->orWhere(function ($sub) use ($evento) {
+                        $sub->whereNull('evento_significativo_id')
+                            ->where('fecha', '>=', $evento->fecha_ini)
+                            ->where('fecha', '<=', $evento->fecha_fin);
+                    });
+            });
+        }
+
+        $facturas = $query->get();
+
+        if ($facturas->isEmpty()) {
+            return [
+                'success' => false,
+                'mensaje' => 'No existen facturas en contingencia (PENDIENTE_ENVIO) pendientes de envío para este evento.',
+            ];
+        }
+
+        $paqueteCompilado = $this->construirPaqueteTarGz($facturas);
+        if ($paqueteCompilado['error']) {
+            return ['success' => false, 'mensaje' => $paqueteCompilado['error']];
+        }
+
+        $puntoVenta = $evento->puntoVenta;
+        $sucursal = $puntoVenta?->sucursal;
+        $cufd = $evento->cufdActivo ?: Cufd::where('punto_venta_id', $puntoVenta->id)->where('fecha_vigencia', '>', now())->latest('id')->first();
+        $cuis = Cuis::where('punto_venta_id', $puntoVenta->id)->where('estado', 'ACTIVO')->latest('id')->first();
+
+        $urlApi = new UrlApiServicio;
+        $codigoAmbiente = (int) config('siat.codigo_ambiente', 2);
+        $codigoModalidad = (int) config('siat.codigo_modalidad', 2);
+        $urlFacturacion = $urlApi->getUrlFacturacionCompraVenta($codigoAmbiente, $codigoModalidad)->url_servicio;
+
+        $fechaEnvioIso = now('America/La_Paz')->format('Y-m-d\TH:i:s.000');
+
+        try {
+            $respRaw = $this->siatController->recepcionPaqueteFactura(
+                config('siat.api_token'),
+                $urlFacturacion,
+                $codigoAmbiente,
+                1, // Factura Compra Venta
+                2, // Fuera de línea (Contingencia)
+                $codigoModalidad,
+                (int) $puntoVenta->codigo,
+                config('siat.codigo_sistema'),
+                (int) $sucursal->codigo_sucursal,
+                $cufd->codigo,
+                $cuis->codigo,
+                config('siat.nit'),
+                1, // Con derecho a crédito fiscal
+                $paqueteCompilado['bytes'],
+                $fechaEnvioIso,
+                $paqueteCompilado['hash'],
+                null,
+                $paqueteCompilado['cantidad'],
+                (int) $evento->codigo_recepcion
+            );
+
+            $resp = json_decode($respRaw, true);
+            $resServicio = $resp['resultado']['RespuestaServicioFacturacion'] ?? [];
+            $transaccion = $resServicio['transaccion'] ?? false;
+            $codRecepPaquete = $resServicio['codigoRecepcion'] ?? null;
+            $codigoEstado = $resServicio['codigoEstado'] ?? null;
+            $codigoDescripcion = $resServicio['codigoDescripcion'] ?? 'PENDIENTE';
+
+            if ($transaccion && $codRecepPaquete) {
+                $paqueteModel = PaqueteFactura::create([
+                    'evento_significativo_id' => $evento->id,
+                    'punto_venta_id' => $puntoVenta->id,
+                    'cufd_id' => $cufd->id,
+                    'usuario_creador_id' => Auth::id(),
+                    'codigo_recepcion' => (string) $codRecepPaquete,
+                    'codigo_estado' => $codigoEstado,
+                    'estado' => $codigoDescripcion,
+                    'cantidad_facturas' => $paqueteCompilado['cantidad'],
+                    'hash_archivo' => $paqueteCompilado['hash'],
+                    'nombre_archivo' => "paquete_ev_{$evento->id}_".date('Ymd_His').'.tar.gz',
+                    'fecha_envio' => now('America/La_Paz'),
+                ]);
+
+                // Asociar facturas al paquete y evento
+                foreach ($facturas as $f) {
+                    $f->update([
+                        'paquete_id' => $paqueteModel->id,
+                        'evento_significativo_id' => $evento->id,
+                    ]);
+                }
+
+                return [
+                    'success' => true,
+                    'paquete' => $paqueteModel,
+                    'codigo_recepcion' => $codRecepPaquete,
+                    'cantidad' => $paqueteCompilado['cantidad'],
+                    'mensaje' => "Paquete de {$paqueteCompilado['cantidad']} facturas enviado exitosamente al SIAT. Código de Recepción: {$codRecepPaquete}",
+                ];
+            }
+
+            $mensajes = $resServicio['mensajesList'] ?? [];
+            $errorDesc = is_array($mensajes) ? json_encode($mensajes, JSON_UNESCAPED_UNICODE) : ($resp['msg'] ?? 'Rechazo en recepción del paquete');
+
+            return [
+                'success' => false,
+                'mensaje' => "Error SIN: {$errorDesc}",
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'mensaje' => 'Excepción SOAP en recepción de paquete: '.$e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Consulta y valida el estado del paquete previamente enviado ante el SIAT.
+     */
+    public function validarPaqueteFactura(int $paqueteId): array
+    {
+        $paquete = PaqueteFactura::with(['puntoVenta.sucursal', 'cufd', 'facturas'])->find($paqueteId);
+        if (! $paquete) {
+            return ['success' => false, 'mensaje' => 'Paquete no encontrado.'];
+        }
+
+        $puntoVenta = $paquete->puntoVenta;
+        $sucursal = $puntoVenta?->sucursal;
+        $cufd = $paquete->cufd ?: Cufd::where('punto_venta_id', $puntoVenta->id)->where('fecha_vigencia', '>', now())->latest('id')->first();
+        $cuis = Cuis::where('punto_venta_id', $puntoVenta->id)->where('estado', 'ACTIVO')->latest('id')->first();
+
+        $urlApi = new UrlApiServicio;
+        $codigoAmbiente = (int) config('siat.codigo_ambiente', 2);
+        $codigoModalidad = (int) config('siat.codigo_modalidad', 2);
+        $urlFacturacion = $urlApi->getUrlFacturacionCompraVenta($codigoAmbiente, $codigoModalidad)->url_servicio;
+
+        try {
+            $respRaw = $this->siatController->validacionRecepcionPaqueteFactura(
+                config('siat.api_token'),
+                $urlFacturacion,
+                $codigoAmbiente,
+                1,
+                $codigoModalidad,
+                (int) $puntoVenta->codigo,
+                config('siat.codigo_sistema'),
+                (int) $sucursal->codigo_sucursal,
+                $cufd->codigo,
+                $cuis->codigo,
+                config('siat.nit'),
+                1,
+                2, // Fuera de línea
+                $paquete->codigo_recepcion
+            );
+
+            $resp = json_decode($respRaw, true);
+            $resServicio = $resp['resultado']['RespuestaServicioFacturacion'] ?? [];
+            $transaccion = $resServicio['transaccion'] ?? false;
+            $codigoEstado = $resServicio['codigoEstado'] ?? null;
+            $codigoDescripcion = $resServicio['codigoDescripcion'] ?? ($transaccion ? 'VALIDADA' : 'OBSERVADA');
+            $mensajesList = $resServicio['mensajesList'] ?? null;
+
+            $paquete->update([
+                'codigo_estado' => $codigoEstado,
+                'estado' => $codigoDescripcion,
+                'mensajes_validacion' => $mensajesList,
+            ]);
+
+            // Si fue validada (Código 908 = VALIDADA)
+            if ($codigoEstado == 908 || $codigoDescripcion === 'VALIDADA') {
+                $paquete->facturas()->update([
+                    'estado' => 'VALIDADA',
+                    'codigo_descripcion' => 'VALIDADA',
+                ]);
+
+                // Si no quedan facturas pendientes en el evento, marcar evento como CERRADO
+                if ($paquete->evento_significativo_id) {
+                    $pendientesRestantes = Factura::where('evento_significativo_id', $paquete->evento_significativo_id)
+                        ->where('estado', 'PENDIENTE_ENVIO')
+                        ->count();
+                    if ($pendientesRestantes === 0) {
+                        EventoSignificativo::where('id', $paquete->evento_significativo_id)->update(['estado' => 'CERRADO']);
+                    }
+                }
+
+                return [
+                    'success' => true,
+                    'codigo_estado' => $codigoEstado,
+                    'estado' => 'VALIDADA',
+                    'mensaje' => '¡El paquete de facturas ha sido VALIDADO oficialmente por Impuestos Nacionales!',
+                ];
+            }
+
+            $mensajeEstado = ($codigoEstado == 901 || $codigoDescripcion === 'PENDIENTE')
+                ? 'El SIN ha recibido el paquete y se encuentra en su cola de procesamiento (901 PENDIENTE). Espere unos instantes y presione nuevamente "Validar en SIAT".'
+                : "Estado del paquete: {$codigoDescripcion} (Código {$codigoEstado}). ".($mensajesList ? json_encode($mensajesList, JSON_UNESCAPED_UNICODE) : '');
+
+            return [
+                'success' => false,
+                'codigo_estado' => $codigoEstado,
+                'estado' => $codigoDescripcion,
+                'observaciones' => $mensajesList,
+                'mensaje' => $mensajeEstado,
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'mensaje' => 'Excepción SOAP en validación de paquete: '.$e->getMessage(),
             ];
         }
     }

@@ -59,4 +59,14 @@ class EventoSignificativo extends Model
     {
         return $this->belongsTo(User::class, 'usuario_creador_id');
     }
+
+    public function paquetes()
+    {
+        return $this->hasMany(PaqueteFactura::class, 'evento_significativo_id');
+    }
+
+    public function facturas()
+    {
+        return $this->hasMany(Factura::class, 'evento_significativo_id');
+    }
 }

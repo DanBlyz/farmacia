@@ -3,6 +3,7 @@
 namespace App\Livewire\Sincronizacion;
 
 use App\Models\EventoSignificativo;
+use App\Models\Factura;
 use App\Models\PuntoVenta;
 use App\Models\TipoEventoSignificativo;
 use App\Services\SiatFacturacionService;
@@ -48,6 +49,11 @@ class EventosSignificativos extends Component
     public bool $showDetalleModal = false;
 
     public ?int $detalleEventoId = null;
+
+    // Modal de Empaquetado y Emisión en Contingencia (Etapa VI SIAT)
+    public bool $showPaqueteModal = false;
+
+    public ?int $paqueteEventoId = null;
 
     public function updatedSearch(): void
     {
@@ -168,12 +174,63 @@ class EventosSignificativos extends Component
         $this->detalleEventoId = null;
     }
 
+    public function abrirModalPaquete(int $eventoId): void
+    {
+        abort_if(! Auth::user()?->tienePermiso('sincronizacion.paquetes.enviar'), 403, 'No tiene permiso para gestionar paquetes de contingencia.');
+
+        $this->paqueteEventoId = $eventoId;
+        $this->showPaqueteModal = true;
+    }
+
+    public function cerrarModalPaquete(): void
+    {
+        $this->showPaqueteModal = false;
+        $this->paqueteEventoId = null;
+    }
+
+    public function enviarPaquete(SiatFacturacionService $siatService): void
+    {
+        abort_if(! Auth::user()?->tienePermiso('sincronizacion.paquetes.enviar'), 403, 'No tiene permiso para enviar paquetes al SIAT.');
+
+        if (! $this->paqueteEventoId) {
+            return;
+        }
+
+        $res = $siatService->enviarPaqueteContingencia($this->paqueteEventoId);
+
+        if ($res['success']) {
+            $msg = $res['mensaje'] ?? 'Paquete de facturas transmitido con éxito al SIAT.';
+            session()->flash('message', $msg);
+            $this->dispatch('swal-alert', icon: 'success', title: '¡Paquete Transmitido!', message: $msg);
+        } else {
+            $this->dispatch('swal-alert', icon: 'error', title: 'Error al Transmitir Paquete', message: $res['mensaje']);
+        }
+    }
+
+    public function validarPaquete(int $paqueteId, SiatFacturacionService $siatService): void
+    {
+        abort_if(! Auth::user()?->tienePermiso('sincronizacion.paquetes.validar'), 403, 'No tiene permiso para validar paquetes en el SIAT.');
+
+        $res = $siatService->validarPaqueteFactura($paqueteId);
+
+        if ($res['success']) {
+            $msg = $res['mensaje'] ?? 'Paquete validado y aceptado por el SIAT.';
+            session()->flash('message', $msg);
+            $this->dispatch('swal-alert', icon: 'success', title: '¡Paquete Validado!', message: $msg);
+        } else {
+            $esProcesando = ($res['codigo_estado'] ?? null) == 901;
+            $icono = $esProcesando ? 'info' : 'warning';
+            $titulo = $esProcesando ? 'Paquete en Proceso (901 PENDIENTE)' : 'Estado del Paquete';
+            $this->dispatch('swal-alert', icon: $icono, title: $titulo, message: $res['mensaje']);
+        }
+    }
+
     public function render(): View
     {
         abort_if(! Auth::user()?->tienePermiso('sincronizacion.eventos.ver'), 403, 'No tienes permiso para ver contingencias y eventos significativos.');
 
         $query = EventoSignificativo::query()
-            ->with(['tipoEvento', 'puntoVenta.sucursal', 'usuarioCreador', 'cufdActivo', 'cufdEvento'])
+            ->with(['tipoEvento', 'puntoVenta.sucursal', 'usuarioCreador', 'cufdActivo', 'cufdEvento', 'paquetes', 'facturas'])
             ->when($this->search !== '', function ($q) {
                 $term = '%'.trim($this->search).'%';
                 $q->where(function ($sub) use ($term) {
@@ -203,11 +260,34 @@ class EventosSignificativos extends Component
             ? EventoSignificativo::with(['tipoEvento', 'puntoVenta.sucursal', 'usuarioCreador', 'cufdActivo', 'cufdEvento'])->find($this->detalleEventoId)
             : null;
 
+        $eventoPaquete = $this->paqueteEventoId
+            ? EventoSignificativo::with(['tipoEvento', 'puntoVenta.sucursal', 'paquetes.cufd', 'paquetes.usuarioCreador', 'paquetes.facturas.cliente'])->find($this->paqueteEventoId)
+            : null;
+
+        $facturasContingencia = $eventoPaquete
+            ? Factura::with('cliente')
+                ->where('punto_venta_id', $eventoPaquete->punto_venta_id)
+                ->where('estado', 'PENDIENTE_ENVIO')
+                ->whereNull('paquete_id')
+                ->where(function ($q) use ($eventoPaquete) {
+                    $q->where('evento_significativo_id', $eventoPaquete->id)
+                        ->orWhere(function ($sub) use ($eventoPaquete) {
+                            $sub->whereNull('evento_significativo_id')
+                                ->where('fecha', '>=', $eventoPaquete->fecha_ini)
+                                ->where('fecha', '<=', $eventoPaquete->fecha_fin);
+                        });
+                })
+                ->orderBy('id', 'asc')
+                ->get()
+            : collect();
+
         return view('livewire.sincronizacion.eventos-significativos', [
             'eventos' => $eventos,
             'puntosVenta' => $puntosVenta,
             'tiposEvento' => $tiposEvento,
             'eventoDetalle' => $eventoDetalle,
+            'eventoPaquete' => $eventoPaquete,
+            'facturasContingencia' => $facturasContingencia,
             'kpis' => [
                 'total' => $totalEventos,
                 'hoy' => $eventosHoy,
