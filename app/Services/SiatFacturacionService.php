@@ -5,10 +5,12 @@ namespace App\Services;
 use App\Http\Controllers\SiatController;
 use App\Models\Cufd;
 use App\Models\Cuis;
+use App\Models\EventoSignificativo;
 use App\Models\Factura;
 use App\Models\LeyendaFactura;
 use App\Models\PuntoVenta;
 use App\Models\Sucursal;
+use App\Models\TipoEventoSignificativo;
 use App\Models\UrlApiServicio;
 use Carbon\Carbon;
 use Exception;
@@ -545,6 +547,123 @@ class SiatFacturacionService
         $host = ($ambiente === 1) ? 'https://siat.impuestos.gob.bo' : 'https://pilotosiat.impuestos.gob.bo';
 
         return "{$host}/consulta/QR?nit={$nit}&cuf={$cuf}&numero={$numero}&t=2";
+    }
+
+    /**
+     * Registra un Evento Significativo de contingencia ante el SIAT y persiste en base de datos.
+     */
+    public function registrarEventoSignificativo(
+        int $tipoEventoSignificativoId,
+        int $puntoVentaId,
+        string $fechaIni,
+        string $fechaFin,
+        ?string $descripcion = null,
+        ?int $cufdEventoId = null
+    ): array {
+        $tipoEvento = TipoEventoSignificativo::findOrFail($tipoEventoSignificativoId);
+        $puntoVenta = PuntoVenta::with('sucursal')->findOrFail($puntoVentaId);
+        $sucursal = $puntoVenta->sucursal;
+
+        $cufdActivo = Cufd::where('sucursal_id', $sucursal->id)
+            ->where('punto_venta_id', $puntoVenta->id)
+            ->latest('id')
+            ->first();
+
+        $cufdEvento = $cufdEventoId ? Cufd::find($cufdEventoId) : $cufdActivo;
+
+        $cuis = Cuis::where('sucursal_id', $sucursal->id)
+            ->where('punto_venta_id', $puntoVenta->id)
+            ->where('estado', 'ACTIVO')
+            ->latest('id')
+            ->first() ?? Cuis::where('sucursal_id', $sucursal->id)->latest('id')->first();
+
+        if (! $cufdActivo || ! $cufdEvento || ! $cuis) {
+            return [
+                'success' => false,
+                'codigo_recepcion' => null,
+                'mensaje' => 'Credenciales CUFD o CUIS no encontradas para este Punto de Venta.',
+            ];
+        }
+
+        $urlApi = new UrlApiServicio;
+        $codigoAmbiente = (int) config('siat.codigo_ambiente', 2);
+        $codigoModalidad = (int) config('siat.codigo_modalidad', 2);
+        $urlOperacionesModel = $urlApi->getUrlFacturacionOperaciones($codigoAmbiente, $codigoModalidad);
+        $urlOperaciones = is_object($urlOperacionesModel) ? $urlOperacionesModel->url_servicio : (string) $urlOperacionesModel;
+
+        if (! $urlOperaciones) {
+            return [
+                'success' => false,
+                'codigo_recepcion' => null,
+                'mensaje' => 'URL de Facturación Operaciones no configurada.',
+            ];
+        }
+
+        $fechaIniIso = Carbon::parse($fechaIni)->format('Y-m-d\TH:i:s').'.000';
+        $fechaFinIso = Carbon::parse($fechaFin)->format('Y-m-d\TH:i:s').'.000';
+        $descFinal = $descripcion ? trim($descripcion) : $tipoEvento->descripcion;
+
+        try {
+            $respRaw = $this->siatController->registroEventoSignificativo(
+                config('siat.api_token'),
+                $urlOperaciones,
+                $codigoAmbiente,
+                (int) $puntoVenta->codigo,
+                config('siat.codigo_sistema'),
+                (int) $sucursal->codigo_sucursal,
+                $cufdActivo->codigo,
+                $cuis->codigo,
+                config('siat.nit'),
+                (int) $tipoEvento->codigo_clasificador,
+                $cufdEvento->codigo,
+                $descFinal,
+                $fechaIniIso,
+                $fechaFinIso
+            );
+
+            $resp = json_decode($respRaw, true);
+            $resEvento = $resp['resultado']['RespuestaListaEventos'] ?? [];
+            $transaccion = $resEvento['transaccion'] ?? false;
+            $codigoRecepcion = $resEvento['codigoRecepcionEventoSignificativo'] ?? null;
+
+            if ($transaccion && $codigoRecepcion) {
+                $eventoModel = EventoSignificativo::create([
+                    'usuario_creador_id' => Auth::id(),
+                    'tipo_evento_significativo_id' => $tipoEvento->id,
+                    'punto_venta_id' => $puntoVenta->id,
+                    'cufd_activo_id' => $cufdActivo->id,
+                    'cufd_evento_id' => $cufdEvento->id,
+                    'cui_id' => $cuis->id,
+                    'descripcion' => $descFinal,
+                    'fecha_ini' => Carbon::parse($fechaIni),
+                    'fecha_fin' => Carbon::parse($fechaFin),
+                    'codigo_recepcion' => (string) $codigoRecepcion,
+                    'estado' => 'REGISTRADO',
+                ]);
+
+                return [
+                    'success' => true,
+                    'codigo_recepcion' => $codigoRecepcion,
+                    'evento' => $eventoModel,
+                    'mensaje' => 'Evento significativo registrado y validado con éxito ante el SIAT.',
+                ];
+            }
+
+            $mensajes = $resEvento['mensajesList'] ?? [];
+            $errorDesc = is_array($mensajes) ? json_encode($mensajes, JSON_UNESCAPED_UNICODE) : ($resp['msg'] ?? 'Rechazo en el registro del evento');
+
+            return [
+                'success' => false,
+                'codigo_recepcion' => null,
+                'mensaje' => $errorDesc,
+            ];
+        } catch (Exception $e) {
+            return [
+                'success' => false,
+                'codigo_recepcion' => null,
+                'mensaje' => 'Excepción SOAP: '.$e->getMessage(),
+            ];
+        }
     }
 
     /**

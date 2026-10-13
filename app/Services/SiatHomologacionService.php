@@ -6,9 +6,11 @@ use App\Http\Controllers\SiatController;
 use App\Models\Cufd;
 use App\Models\Cuis;
 use App\Models\Detalle;
+use App\Models\EventoSignificativo;
 use App\Models\Factura;
 use App\Models\PuntoVenta;
 use App\Models\Sucursal;
+use App\Models\TipoEventoSignificativo;
 use App\Models\UrlApiServicio;
 use Carbon\Carbon;
 use Exception;
@@ -100,6 +102,7 @@ class SiatHomologacionService
             'codigoSistema' => $codigoSistema,
             'codigoSucursal' => (int) $sucursal->codigo_sucursal,
             'cuis' => $cuisModel->codigo,
+            'cuisId' => $cuisModel->id,
             'nit' => $nit,
         ];
     }
@@ -537,6 +540,271 @@ class SiatHomologacionService
                 'pv' => $pv,
                 'exitosos' => $exitososRegistro,
                 'fallidos' => $fallidosRegistro,
+                'error' => $ultimoError,
+            ];
+        }
+
+        return [
+            'total_intentos' => $totalIntentos,
+            'exitosos' => $totalExitosos,
+            'fallidos' => $totalFallidos,
+            'detalle' => $detalle,
+        ];
+    }
+
+    /**
+     * Ejecuta las pruebas de la Etapa V (Registro de Eventos Significativos)
+     *
+     * @param  int  $repeticiones  Normalmente 5 por registro (14 combinaciones x 5 = 70 pruebas)
+     * @param  int|null  $pvFiltrado  1, 0 o null para ambos
+     * @param  int|null  $motivoFiltrado  1 a 7 o null para todos
+     * @param  callable|null  $onProgress  Callback ($registroActual, $totalRegistros, $info)
+     * @return array{total_intentos: int, exitosos: int, fallidos: int, detalle: array}
+     */
+    public function ejecutarEtapaEventosSignificativos(
+        int $repeticiones = 5,
+        ?int $pvFiltrado = null,
+        ?int $motivoFiltrado = null,
+        ?callable $onProgress = null
+    ): array {
+        $pvs = $pvFiltrado !== null ? [$pvFiltrado] : [1, 0];
+
+        $motivosOficiales = [
+            1 => 'CORTE DEL SERVICIO DE INTERNET',
+            2 => 'INACCESIBILIDAD AL SERVICIO WEB DE LA ADMINISTRACIÓN TRIBUTARIA',
+            3 => 'INGRESO A ZONAS SIN INTERNET POR DESPLIEGUE DE PUNTO DE VENTA',
+            4 => 'VENTA EN LUGARES SIN INTERNET',
+            5 => 'VIRUS INFORMÁTICO O FALLA DE SOFTWARE',
+            6 => 'CAMBIO DE INFRAESTRUCTURA DE SISTEMA O FALLA DE HARDWARE',
+            7 => 'CORTE DE SUMINISTRO DE ENERGÍA ELÉCTRICA',
+        ];
+
+        if ($motivoFiltrado !== null && isset($motivosOficiales[$motivoFiltrado])) {
+            $motivos = [$motivoFiltrado => $motivosOficiales[$motivoFiltrado]];
+        } else {
+            $motivos = $motivosOficiales;
+        }
+
+        // Matriz de combinaciones: Motivos x Puntos de Venta
+        $combinaciones = [];
+        foreach ($motivos as $codMotivo => $descMotivo) {
+            foreach ($pvs as $pv) {
+                $combinaciones[] = [
+                    'motivo' => $codMotivo,
+                    'descripcion' => $descMotivo,
+                    'pv' => $pv,
+                ];
+            }
+        }
+
+        $totalRegistros = count($combinaciones);
+        $registroIndex = 0;
+        $totalIntentos = 0;
+        $totalExitosos = 0;
+        $totalFallidos = 0;
+        $detalle = [];
+
+        $urlApi = new UrlApiServicio;
+        $ambiente = (int) config('siat.codigo_ambiente', 2);
+        $modalidad = (int) config('siat.codigo_modalidad', 2);
+        $urlOperacionesModel = $urlApi->getUrlFacturacionOperaciones($ambiente, $modalidad);
+        $urlOperaciones = is_object($urlOperacionesModel) ? $urlOperacionesModel->url_servicio : (string) $urlOperacionesModel;
+
+        $userId = Auth::id() ?? 1;
+        $cursorFecha = null;
+
+        foreach ($combinaciones as $comb) {
+            $registroIndex++;
+            $pv = $comb['pv'];
+            $codMotivo = $comb['motivo'];
+            $descMotivo = $comb['descripcion'];
+
+            $contexto = $this->resolverContexto($pv);
+
+            if (! $contexto['success'] || ! $urlOperaciones) {
+                $msg = $contexto['message'] ?? 'URL de Facturación Operaciones no configurada.';
+                $detalle[] = [
+                    'motivo' => $codMotivo,
+                    'descripcion' => $descMotivo,
+                    'pv' => $pv,
+                    'exitosos' => 0,
+                    'fallidos' => $repeticiones,
+                    'error' => $msg,
+                ];
+                $totalIntentos += $repeticiones;
+                $totalFallidos += $repeticiones;
+
+                continue;
+            }
+
+            $cufd = Cufd::where('sucursal_id', $contexto['sucursalId'])
+                ->where('punto_venta_id', $contexto['puntoVentaId'])
+                ->where('fecha_vigencia', '>', now())
+                ->latest('id')
+                ->first() ?? Cufd::where('sucursal_id', $contexto['sucursalId'])->latest('id')->first();
+
+            if (! $cufd) {
+                $detalle[] = [
+                    'motivo' => $codMotivo,
+                    'descripcion' => $descMotivo,
+                    'pv' => $pv,
+                    'exitosos' => 0,
+                    'fallidos' => $repeticiones,
+                    'error' => "Sin CUFD vigente para el Punto de Venta {$pv}.",
+                ];
+                $totalIntentos += $repeticiones;
+                $totalFallidos += $repeticiones;
+
+                continue;
+            }
+
+            $inicioCufd = Carbon::parse($cufd->fecha_vigencia, 'America/La_Paz')->subDay();
+            $limiteSuperior = now('America/La_Paz')->subMinutes(3);
+
+            if ($cursorFecha === null) {
+                $maxFinExistente = EventoSignificativo::where('punto_venta_id', $contexto['puntoVentaId'])->max('fecha_fin');
+                if ($maxFinExistente && Carbon::parse($maxFinExistente, 'America/La_Paz')->gt($inicioCufd)) {
+                    $cursorFecha = Carbon::parse($maxFinExistente, 'America/La_Paz')->addMinutes(5);
+                } else {
+                    $cursorFecha = $inicioCufd->copy()->addMinutes(18);
+                }
+            } else {
+                $cursorFecha = $cursorFecha->copy()->addMinutes(3);
+            }
+
+            if ($cursorFecha->gte($limiteSuperior)) {
+                $cursorFecha = $inicioCufd->copy()->addMinutes(22);
+            }
+
+            $exitososRegistro = 0;
+            $fallidosRegistro = 0;
+            $ultimoError = null;
+            $ultimoCodigoRecepcion = null;
+
+            for ($i = 1; $i <= $repeticiones; $i++) {
+                $totalIntentos++;
+                $intentosRetry = 0;
+                $exitoIteracion = false;
+
+                while ($intentosRetry < 15 && ! $exitoIteracion) {
+                    $intentosRetry++;
+                    if ($cursorFecha->gte($limiteSuperior)) {
+                        $cursorFecha = $inicioCufd->copy()->addMinutes(15 + ($intentosRetry * 5));
+                    }
+
+                    $fechaIni = $cursorFecha->format('Y-m-d\TH:i:s').'.000';
+                    $fechaFin = $cursorFecha->copy()->addMinute()->format('Y-m-d\TH:i:s').'.000';
+
+                    try {
+                        $respRaw = $this->siatController->registroEventoSignificativo(
+                            $contexto['token'],
+                            $urlOperaciones,
+                            $contexto['ambiente'],
+                            $contexto['codigoPuntoVenta'],
+                            $contexto['codigoSistema'],
+                            $contexto['codigoSucursal'],
+                            $cufd->codigo,
+                            $contexto['cuis'],
+                            $contexto['nit'],
+                            $codMotivo,
+                            $cufd->codigo,
+                            $descMotivo,
+                            $fechaIni,
+                            $fechaFin
+                        );
+
+                        $resp = json_decode($respRaw, true);
+                        $resEvento = $resp['resultado']['RespuestaListaEventos'] ?? [];
+                        $transaccion = $resEvento['transaccion'] ?? false;
+                        $codigoRecepcion = $resEvento['codigoRecepcionEventoSignificativo'] ?? null;
+
+                        if ($transaccion && $codigoRecepcion) {
+                            $exitososRegistro++;
+                            $totalExitosos++;
+                            $ultimoCodigoRecepcion = $codigoRecepcion;
+                            $exitoIteracion = true;
+
+                            // Registrar en base de datos para trazabilidad
+                            try {
+                                $tipoEventoModel = TipoEventoSignificativo::where('codigo_clasificador', $codMotivo)->first();
+                                EventoSignificativo::create([
+                                    'punto_venta_id' => $contexto['puntoVentaId'],
+                                    'tipo_evento_significativo_id' => $tipoEventoModel?->id ?? 1,
+                                    'codigo_recepcion' => (string) $codigoRecepcion,
+                                    'fecha_ini' => Carbon::parse($fechaIni),
+                                    'fecha_fin' => Carbon::parse($fechaFin),
+                                    'descripcion' => $descMotivo,
+                                    'cufd_activo_id' => $cufd->id,
+                                    'cufd_evento_id' => $cufd->id,
+                                    'cui_id' => $contexto['cuisId'] ?? null,
+                                    'usuario_creador_id' => $userId,
+                                    'estado' => 'REGISTRADO',
+                                ]);
+                            } catch (\Throwable $th) {
+                                // Continuar sin abortar
+                            }
+
+                            $cursorFecha = $cursorFecha->addMinutes(3);
+                        } else {
+                            $msgs = $resEvento['mensajesList'] ?? [];
+                            $msgArray = is_array($msgs) ? (isset($msgs['codigo']) ? [$msgs] : $msgs) : [];
+                            $esSolapamiento = false;
+                            foreach ($msgArray as $m) {
+                                if (($m['codigo'] ?? null) == 981) {
+                                    $esSolapamiento = true;
+                                    break;
+                                }
+                            }
+
+                            if ($esSolapamiento && $intentosRetry < 15) {
+                                $cursorFecha = $cursorFecha->addMinutes(6);
+
+                                continue;
+                            }
+
+                            $ultimoError = $resp['msg'] ?? 'Fallo en registro de evento';
+                            if (! empty($resEvento['mensajesList'])) {
+                                $ultimoError .= ': '.json_encode($msgArray, JSON_UNESCAPED_UNICODE);
+                            }
+                            $cursorFecha = $cursorFecha->addMinutes(3);
+                            break;
+                        }
+                    } catch (Exception $e) {
+                        $ultimoError = $e->getMessage();
+                        $cursorFecha = $cursorFecha->addMinutes(3);
+                        break;
+                    }
+                }
+
+                if (! $exitoIteracion) {
+                    $fallidosRegistro++;
+                    $totalFallidos++;
+                }
+
+                if ($onProgress) {
+                    $onProgress($registroIndex, $totalRegistros, [
+                        'motivo' => $codMotivo,
+                        'descripcion' => $descMotivo,
+                        'pv' => $pv,
+                        'iteracion' => $i,
+                        'total_iteraciones' => $repeticiones,
+                        'exitosos' => $exitososRegistro,
+                        'fallidos' => $fallidosRegistro,
+                        'codigo_recepcion' => $ultimoCodigoRecepcion,
+                        'error' => $ultimoError,
+                    ]);
+                }
+
+                usleep(120000); // Pausa anti-bloqueo 120 ms
+            }
+
+            $detalle[] = [
+                'motivo' => $codMotivo,
+                'descripcion' => $descMotivo,
+                'pv' => $pv,
+                'exitosos' => $exitososRegistro,
+                'fallidos' => $fallidosRegistro,
+                'codigo_recepcion' => $ultimoCodigoRecepcion,
                 'error' => $ultimoError,
             ];
         }

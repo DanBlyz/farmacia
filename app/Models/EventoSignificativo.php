@@ -29,4 +29,34 @@ class EventoSignificativo extends Model
         'estado',
         'deleted_at',
     ];
+
+    public function tipoEvento()
+    {
+        return $this->belongsTo(TipoEventoSignificativo::class, 'tipo_evento_significativo_id');
+    }
+
+    public function puntoVenta()
+    {
+        return $this->belongsTo(PuntoVenta::class, 'punto_venta_id');
+    }
+
+    public function cufdActivo()
+    {
+        return $this->belongsTo(Cufd::class, 'cufd_activo_id');
+    }
+
+    public function cufdEvento()
+    {
+        return $this->belongsTo(Cufd::class, 'cufd_evento_id');
+    }
+
+    public function cui()
+    {
+        return $this->belongsTo(Cuis::class, 'cui_id');
+    }
+
+    public function usuarioCreador()
+    {
+        return $this->belongsTo(User::class, 'usuario_creador_id');
+    }
 }
