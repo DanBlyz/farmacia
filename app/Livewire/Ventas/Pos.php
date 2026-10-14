@@ -70,9 +70,11 @@ class Pos extends Component
 
     public string $nuevoClienteApellidos = '';
 
-    public string $nuevoClienteDocumento = '';
+    public string $nuevoClienteCedula = '';
 
     public string $nuevoClienteComplemento = '';
+
+    public string $nuevoClienteNit = '';
 
     public string $nuevoClienteRazonSocial = '';
 
@@ -374,6 +376,7 @@ class Pos extends Component
         $this->montoQr = 0;
         $this->montoTransferencia = 0;
         $this->cancelarSeleccionProducto();
+        $this->asignarClienteDefault();
     }
 
     public function updatedDescuentoGeneral(): void
@@ -441,36 +444,67 @@ class Pos extends Component
 
     public function abrirModalNuevoCliente(): void
     {
+        $this->resetErrorBag();
         $this->nuevoClienteNombres = '';
         $this->nuevoClienteApellidos = '';
-        $this->nuevoClienteDocumento = '';
+        $this->nuevoClienteCedula = '';
         $this->nuevoClienteComplemento = '';
+        $this->nuevoClienteNit = '';
         $this->nuevoClienteRazonSocial = '';
         $this->nuevoClienteCelular = '';
         $this->showNuevoClienteModal = true;
+    }
+
+    public function updatedNuevoClienteNombres(): void
+    {
+        $this->sugerirRazonSocial();
+    }
+
+    public function updatedNuevoClienteApellidos(): void
+    {
+        $this->sugerirRazonSocial();
+    }
+
+    private function sugerirRazonSocial(): void
+    {
+        $nombreCompleto = trim("{$this->nuevoClienteNombres} {$this->nuevoClienteApellidos}");
+        if (empty($this->nuevoClienteRazonSocial) || $this->nuevoClienteRazonSocial === strtoupper(trim($this->nuevoClienteNombres))) {
+            $this->nuevoClienteRazonSocial = strtoupper($nombreCompleto);
+        }
     }
 
     public function guardarNuevoCliente(): void
     {
         $this->validate([
             'nuevoClienteNombres' => 'required|string|min:2|max:100',
-            'nuevoClienteDocumento' => 'required|string|min:3|max:50',
+            'nuevoClienteApellidos' => 'nullable|string|max:100',
+            'nuevoClienteCedula' => 'nullable|string|max:30',
+            'nuevoClienteComplemento' => 'nullable|string|max:5',
+            'nuevoClienteNit' => 'nullable|string|max:30',
             'nuevoClienteRazonSocial' => 'required|string|min:2|max:150',
+            'nuevoClienteCelular' => 'nullable|string|max:30',
         ], [
-            'nuevoClienteNombres.required' => 'El nombre es obligatorio.',
-            'nuevoClienteDocumento.required' => 'El NIT o C.I. es obligatorio.',
-            'nuevoClienteRazonSocial.required' => 'La razón social es obligatoria.',
+            'nuevoClienteNombres.required' => 'El nombre del cliente es obligatorio.',
+            'nuevoClienteRazonSocial.required' => 'La razón social para la factura es obligatoria.',
         ]);
 
-        $doc = trim($this->nuevoClienteDocumento);
-        $esNit = strlen($doc) >= 8;
+        $cedula = trim($this->nuevoClienteCedula);
+        $nit = trim($this->nuevoClienteNit);
+        $complemento = trim($this->nuevoClienteComplemento);
+
+        if (empty($cedula) && empty($nit)) {
+            $this->addError('nuevoClienteCedula', 'Debe registrar al menos la Cédula de Identidad o el NIT.');
+            $this->addError('nuevoClienteNit', 'Debe registrar al menos la Cédula de Identidad o el NIT.');
+
+            return;
+        }
 
         $cliente = Cliente::create([
             'nombres' => trim($this->nuevoClienteNombres),
             'ap_paterno' => trim($this->nuevoClienteApellidos),
-            'cedula' => $esNit ? null : $doc,
-            'nit' => $doc,
-            'complemento' => trim($this->nuevoClienteComplemento) ?: null,
+            'cedula' => $cedula ?: null,
+            'complemento' => ($cedula && $complemento) ? strtoupper($complemento) : null,
+            'nit' => $nit ?: null,
             'razon_social' => strtoupper(trim($this->nuevoClienteRazonSocial)),
             'numero_celular' => trim($this->nuevoClienteCelular) ?: null,
             'estado' => 'ACTIVO',
@@ -503,6 +537,17 @@ class Pos extends Component
         }
 
         $totalAPagar = round($this->calcularTotal(), 2);
+
+        // Control Normativo SIAT (RND 102100000011 / RND 102300000021):
+        // Para ventas iguales o superiores a Bs. 1.000, es obligatorio consignar C.I. o NIT y Nombre/Razón Social.
+        // Queda prohibida la emisión a "Sin Nombre" (99001).
+        $esSinNombre = ($this->clienteId === 1 || trim((string) $this->clienteDocumento) === '99001' || strtoupper(trim((string) $this->clienteRazonSocial)) === 'S/N' || empty(trim((string) $this->clienteDocumento)));
+        if ($totalAPagar >= 1000.00 && $esSinNombre) {
+            $this->dispatch('swal-alert', icon: 'warning', title: 'Identificación Obligatoria (SIN)', message: 'Según la normativa tributaria (RND 102100000011 / RND 102300000021), para ventas iguales o superiores a Bs. 1.000 es obligatorio registrar los datos nominativos del cliente (C.I. o NIT con Nombres/Razón Social). No se permite emitir con S/N ni NIT 99001.');
+
+            return;
+        }
+
         $pagoEf = round((float) $this->montoEfectivo, 2);
         $pagoQr = round((float) $this->montoQr, 2);
         $pagoTransf = round((float) $this->montoTransferencia, 2);
@@ -569,8 +614,8 @@ class Pos extends Component
                 'cliente_id' => $this->clienteId ?: 1,
                 'punto_venta_id' => $puntoVenta->id,
                 'fecha' => $fechaActual,
-                'nit' => $this->clienteDocumento,
-                'razon_social' => $this->clienteRazonSocial,
+                'nit' => $this->clienteDocumento ?: '99001',
+                'razon_social' => $this->clienteRazonSocial ?: 'S/N',
                 'numero_factura' => (string) $numeroFactura,
                 'facturado' => 'SI',
                 'codigo_metodo_pago' => $metodoPagoSiat,
@@ -744,7 +789,7 @@ class Pos extends Component
         $caja = Caja::obtenerCajaAbierta(Auth::id());
 
         // Búsqueda de Productos con stock disponible en la sucursal del cajero
-        $productosEncontrados = [];
+        $productosEncontrados = collect();
         if (strlen(trim($this->productoSearch)) >= 2 && $this->sucursalId) {
             $productosEncontrados = Producto::with(['lotes' => function ($q) {
                 $q->where('sucursal_id', $this->sucursalId)
@@ -764,7 +809,7 @@ class Pos extends Component
         }
 
         // Lotes del producto actualmente seleccionado
-        $lotesProducto = [];
+        $lotesProducto = collect();
         if ($this->selectedProductoId && $this->sucursalId) {
             $lotesProducto = Lote::where('producto_id', $this->selectedProductoId)
                 ->where('sucursal_id', $this->sucursalId)
@@ -776,7 +821,7 @@ class Pos extends Component
         }
 
         // Búsqueda de Clientes
-        $clientesEncontrados = [];
+        $clientesEncontrados = collect();
         if (strlen(trim($this->clienteSearch)) >= 2) {
             $clientesEncontrados = Cliente::where(function ($q) {
                 $q->where('nombres', 'like', "%{$this->clienteSearch}%")

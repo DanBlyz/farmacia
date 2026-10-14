@@ -201,25 +201,69 @@ class SiatFacturacionService
 
         $fechaEmisionIso = Carbon::parse($factura->fecha)->format('Y-m-d\TH:i:s').'.000';
 
-        // Normalización de datos del cliente para factura SIAT
+        // Normalización de datos del cliente según normativa SIAT (RND 102100000011)
         $cliente = $factura->cliente;
-        $esSinNombre = (! $cliente || $cliente->id === 1 || trim($factura->nit) === '99001' || strtoupper(trim($factura->razon_social)) === 'S/N');
+        $docRaw = trim((string) ($factura->nit ?: ($cliente?->nit ?: ($cliente?->cedula ?: '99001'))));
+        $razonSocialRaw = trim((string) ($factura->razon_social ?: ($cliente?->razon_social ?: 'S/N')));
 
-        if ($esSinNombre) {
-            $codigoTipoDoc = 5; // NIT especial 99001
+        // Detección de Códigos Especiales Normativos SIAT (99001, 99002, 99003)
+        $es99001 = ($docRaw === '99001' || (! $cliente && empty($docRaw)) || ($cliente?->id === 1 && $docRaw === '99001'));
+        $es99002 = ($docRaw === '99002' || strcasecmp($razonSocialRaw, 'Control Tributario') === 0);
+        $es99003 = ($docRaw === '99003' || strcasecmp($razonSocialRaw, 'VENTAS MENORES DEL DÍA') === 0 || strcasecmp($razonSocialRaw, 'VENTAS MENORES DEL DIA') === 0);
+
+        if ($es99001) {
+            // Caso Especial 99001: Extranjeros sin residencia, consulados, embajadas, consumidor S/N sin datos
+            $codigoTipoDoc = 5; // NIT
             $numeroDoc = '99001';
             $complementoTag = '<complemento xsi:nil="true"/>';
-            $razonSocialCliente = 'S/N';
+            $razonSocialCliente = (! empty($razonSocialRaw) && strtoupper($razonSocialRaw) !== 'S/N')
+                ? htmlspecialchars($razonSocialRaw)
+                : 'S/N';
             $codigoCliente = 'CLI-99001';
+            $codigoExcepcion = 1; // Obligatorio según instructivo SIAT para códigos especiales
+        } elseif ($es99002) {
+            // Caso Especial 99002: Procedimientos de Control Tributario del SIN
+            $codigoTipoDoc = 5; // NIT
+            $numeroDoc = '99002';
+            $complementoTag = '<complemento xsi:nil="true"/>';
+            $razonSocialCliente = 'Control Tributario';
+            $codigoCliente = 'CLI-99002';
+            $codigoExcepcion = 1; // Obligatorio para 99002
+        } elseif ($es99003) {
+            // Caso Especial 99003: Totalización de Ventas Menores del Día (< Bs. 5)
+            $codigoTipoDoc = 5; // NIT
+            $numeroDoc = '99003';
+            $complementoTag = '<complemento xsi:nil="true"/>';
+            $razonSocialCliente = 'VENTAS MENORES DEL DÍA';
+            $codigoCliente = 'CLI-99003';
+            $codigoExcepcion = 1; // Obligatorio para 99003
         } else {
-            // Verificar si el documento es NIT o CI
-            $esNit = ! empty($cliente?->nit) && strlen(trim($cliente->nit)) >= 7 && empty($cliente?->cedula);
+            // Cliente Regular: Verificar si es NIT (5) o Cédula de Identidad (1)
+            $esNit = (! empty($cliente?->nit) && $docRaw === trim((string) $cliente->nit))
+                || (! empty($cliente?->nit) && empty($cliente?->cedula));
             $codigoTipoDoc = $esNit ? 5 : 1;
-            $numeroDoc = htmlspecialchars($factura->nit ?: ($cliente?->cedula ?: '99001'));
+
+            // Extraer únicamente caracteres numéricos según requerimiento SIAT
+            $docNumerico = preg_replace('/[^0-9]/', '', $docRaw);
+            $numeroDoc = $docNumerico ?: '99001';
+
+            // El complemento solo es válido para Cédula de Identidad (Tipo 1); para NIT siempre es nil
             $complemento = $cliente?->complemento ? trim($cliente->complemento) : null;
-            $complementoTag = $complemento ? "<complemento>{$complemento}</complemento>" : '<complemento xsi:nil="true"/>';
-            $razonSocialCliente = htmlspecialchars($factura->razon_social ?: ($cliente?->razon_social ?: 'S/N'));
+            $complementoTag = ($codigoTipoDoc === 1 && $complemento)
+                ? '<complemento>'.htmlspecialchars($complemento).'</complemento>'
+                : '<complemento xsi:nil="true"/>';
+
+            $razonSocialCliente = htmlspecialchars($razonSocialRaw ?: 'S/N');
             $codigoCliente = 'CLI-'.$numeroDoc;
+
+            // Código de Excepción: Solo aplica para NIT (tipo 5).
+            // En fuera de línea (tipoEmision = 2 o contingencia), el SIN exige enviar siempre 1 para NIT.
+            $esFueraDeLinea = ($factura->estado === 'PENDIENTE_ENVIO' || ! empty($factura->evento_significativo_id));
+            if ($codigoTipoDoc === 5 && $esFueraDeLinea) {
+                $codigoExcepcion = 1;
+            } else {
+                $codigoExcepcion = 0;
+            }
         }
 
         $leyendaSin = $this->obtenerLeyendaNormativa();
@@ -253,7 +297,7 @@ class SiatFacturacionService
         $xml .= '        <montoTotalMoneda>'.number_format((float) $factura->total, 2, '.', '')."</montoTotalMoneda>\n";
         $xml .= "        <montoGiftCard xsi:nil=\"true\"/>\n";
         $xml .= '        <descuentoAdicional>'.number_format((float) ($factura->descuento_adicional ?? 0), 2, '.', '')."</descuentoAdicional>\n";
-        $xml .= "        <codigoExcepcion>0</codigoExcepcion>\n";
+        $xml .= "        <codigoExcepcion>{$codigoExcepcion}</codigoExcepcion>\n";
         $xml .= "        <cafc xsi:nil=\"true\"/>\n";
         $xml .= '        <leyenda>'.htmlspecialchars($leyendaSin)."</leyenda>\n";
         $xml .= '        <usuario>'.htmlspecialchars($usuario ?: (Auth::user()?->usuario ?: 'cajero'))."</usuario>\n";

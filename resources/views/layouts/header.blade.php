@@ -38,7 +38,7 @@
     <!-- Lado Derecho: Acciones, Modo Oscuro y Perfil -->
     <div class="flex items-center gap-2 sm:gap-3">
         <!-- Botón de Venta Rápida (POS) -->
-        <a href="#" class="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-2xs transition duration-150">
+        <a href="{{ route('ventas.pos') }}" class="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-2xs transition duration-150">
             <i class="fas fa-cash-register text-xs"></i>
             <span>Nueva Venta POS</span>
         </a>

@@ -13,6 +13,7 @@ use App\Models\Producto;
 use App\Models\PuntoVenta;
 use App\Models\Sucursal;
 use App\Models\User;
+use App\Services\SiatFacturacionService;
 use Carbon\Carbon;
 use Livewire\Livewire;
 
@@ -53,9 +54,10 @@ test('authenticated users with permission can visit the pos page', function () {
         ->assertSeeLivewire(Pos::class);
 });
 
-test('pos defaults to client ID 1 (S/N) and allows fast registration of new client', function () {
+test('pos defaults to client ID 1 (S/N) and allows fast registration of new client with separated CI and NIT fields', function () {
     $user = User::factory()->admin()->create();
 
+    // 1. Registro con Cédula de Identidad y Complemento
     Livewire::actingAs($user)
         ->test(Pos::class)
         ->assertSet('clienteId', 1)
@@ -65,7 +67,8 @@ test('pos defaults to client ID 1 (S/N) and allows fast registration of new clie
         ->assertSet('showNuevoClienteModal', true)
         ->set('nuevoClienteNombres', 'María Elena')
         ->set('nuevoClienteApellidos', 'Vargas Quispe')
-        ->set('nuevoClienteDocumento', '6892015')
+        ->set('nuevoClienteCedula', '6892015')
+        ->set('nuevoClienteComplemento', '1B')
         ->set('nuevoClienteRazonSocial', 'VARGAS MARIA')
         ->set('nuevoClienteCelular', '76512345')
         ->call('guardarNuevoCliente')
@@ -74,8 +77,28 @@ test('pos defaults to client ID 1 (S/N) and allows fast registration of new clie
         ->assertSet('clienteRazonSocial', 'VARGAS MARIA');
 
     $this->assertDatabaseHas('clientes', [
-        'nit' => '6892015',
+        'cedula' => '6892015',
+        'complemento' => '1B',
+        'nit' => null,
         'razon_social' => 'VARGAS MARIA',
+    ]);
+
+    // 2. Registro con NIT exclusivo
+    Livewire::actingAs($user)
+        ->test(Pos::class)
+        ->call('abrirModalNuevoCliente')
+        ->set('nuevoClienteNombres', 'Distribuidora Farmacéutica')
+        ->set('nuevoClienteNit', '1028475027')
+        ->set('nuevoClienteRazonSocial', 'DISTRIBUIDORA FARMACEUTICA S.R.L.')
+        ->call('guardarNuevoCliente')
+        ->assertSet('showNuevoClienteModal', false)
+        ->assertSet('clienteDocumento', '1028475027')
+        ->assertSet('clienteRazonSocial', 'DISTRIBUIDORA FARMACEUTICA S.R.L.');
+
+    $this->assertDatabaseHas('clientes', [
+        'cedula' => null,
+        'nit' => '1028475027',
+        'razon_social' => 'DISTRIBUIDORA FARMACEUTICA S.R.L.',
     ]);
 });
 
@@ -151,7 +174,10 @@ test('can process a sale with multiple payment methods, discounts FEFO batch sto
         ->and((float) $factura->total)->toBe(50.00)
         ->and((float) $factura->descuento_adicional)->toBe(5.00)
         ->and($factura->cuf)->not->toBeNull()
-        ->and($factura->cliente_id)->toBe(1);
+        ->and($factura->cliente_id)->toBe(1)
+        ->and($factura->productos_xml)->toContain('<codigoTipoDocumentoIdentidad>5</codigoTipoDocumentoIdentidad>')
+        ->and($factura->productos_xml)->toContain('<numeroDocumento>99001</numeroDocumento>')
+        ->and($factura->productos_xml)->toContain('<codigoExcepcion>1</codigoExcepcion>');
 
     // Verificar que se crearon los detalles
     $this->assertDatabaseHas('detalles', [
@@ -459,4 +485,222 @@ test('selling price strictly prioritizes updated product price over lote price',
         'cantidad' => 2,
         'total' => 70.00,
     ]);
+});
+
+test('siat xml generator adheres to special codes 99001 99002 99003 and standard CI rules', function () {
+    $user = User::factory()->admin()->create();
+    $service = app(SiatFacturacionService::class);
+    $sucursal = Sucursal::factory()->create(['codigo_sucursal' => 0]);
+    $puntoVenta = PuntoVenta::create([
+        'sucursal_id' => $sucursal->id,
+        'nombre' => 'Caja Central',
+        'codigo' => 0,
+        'estado' => 'ACTIVO',
+    ]);
+    $caja = Caja::factory()->create([
+        'usuario_id' => $user->id,
+        'sucursal_id' => $sucursal->id,
+        'punto_venta_id' => $puntoVenta->id,
+    ]);
+    $cufd = Cufd::create([
+        'usuario_creador_id' => $user->id,
+        'sucursal_id' => $sucursal->id,
+        'punto_venta_id' => $puntoVenta->id,
+        'codigo_ambiente' => 2,
+        'codigo' => 'TESTCUFD1234567890',
+        'codigo_control' => 'CTRL123',
+        'direccion' => 'Av. Central 123',
+        'fecha_vigencia' => now()->addDay(),
+    ]);
+
+    // Caso 1: NIT 99001 (S/N o extranjero) -> tipo doc 5, doc 99001, codigoExcepcion 1
+    $f99001 = Factura::create([
+        'sucursal_id' => $sucursal->id,
+        'punto_venta_id' => $puntoVenta->id,
+        'cufd_id' => $cufd->id,
+        'caja_id' => $caja->id,
+        'cliente_id' => 1,
+        'usuario_creador_id' => $user->id,
+        'numero_factura' => '101',
+        'nit' => '99001',
+        'razon_social' => 'S/N',
+        'fecha' => now(),
+        'total' => 10.00,
+        'cuf' => 'CUF101',
+        'estado' => 'EMITIDA',
+    ]);
+    $xml1 = $service->construirXmlFacturaCompraVenta($f99001);
+    expect($xml1)->toContain('<codigoTipoDocumentoIdentidad>5</codigoTipoDocumentoIdentidad>')
+        ->and($xml1)->toContain('<numeroDocumento>99001</numeroDocumento>')
+        ->and($xml1)->toContain('<codigoExcepcion>1</codigoExcepcion>')
+        ->and($xml1)->toContain('<nombreRazonSocial>S/N</nombreRazonSocial>');
+
+    // Caso 2: NIT 99002 (Control Tributario) -> tipo doc 5, doc 99002, codigoExcepcion 1, razonSocial Control Tributario
+    $f99002 = Factura::create([
+        'sucursal_id' => $sucursal->id,
+        'punto_venta_id' => $puntoVenta->id,
+        'cufd_id' => $cufd->id,
+        'caja_id' => $caja->id,
+        'cliente_id' => null,
+        'usuario_creador_id' => $user->id,
+        'numero_factura' => '102',
+        'nit' => '99002',
+        'razon_social' => 'Control Tributario',
+        'fecha' => now(),
+        'total' => 10.00,
+        'cuf' => 'CUF102',
+        'estado' => 'EMITIDA',
+    ]);
+    $xml2 = $service->construirXmlFacturaCompraVenta($f99002);
+    expect($xml2)->toContain('<codigoTipoDocumentoIdentidad>5</codigoTipoDocumentoIdentidad>')
+        ->and($xml2)->toContain('<numeroDocumento>99002</numeroDocumento>')
+        ->and($xml2)->toContain('<codigoExcepcion>1</codigoExcepcion>')
+        ->and($xml2)->toContain('<nombreRazonSocial>Control Tributario</nombreRazonSocial>');
+
+    // Caso 3: NIT 99003 (Ventas Menores del Día) -> tipo doc 5, doc 99003, codigoExcepcion 1, razonSocial VENTAS MENORES DEL DÍA
+    $f99003 = Factura::create([
+        'sucursal_id' => $sucursal->id,
+        'punto_venta_id' => $puntoVenta->id,
+        'cufd_id' => $cufd->id,
+        'caja_id' => $caja->id,
+        'cliente_id' => null,
+        'usuario_creador_id' => $user->id,
+        'numero_factura' => '103',
+        'nit' => '99003',
+        'razon_social' => 'VENTAS MENORES DEL DÍA',
+        'fecha' => now(),
+        'total' => 10.00,
+        'cuf' => 'CUF103',
+        'estado' => 'EMITIDA',
+    ]);
+    $xml3 = $service->construirXmlFacturaCompraVenta($f99003);
+    expect($xml3)->toContain('<codigoTipoDocumentoIdentidad>5</codigoTipoDocumentoIdentidad>')
+        ->and($xml3)->toContain('<numeroDocumento>99003</numeroDocumento>')
+        ->and($xml3)->toContain('<codigoExcepcion>1</codigoExcepcion>')
+        ->and($xml3)->toContain('<nombreRazonSocial>VENTAS MENORES DEL DÍA</nombreRazonSocial>');
+
+    // Caso 4: Cliente con Carnet de Identidad y Complemento -> tipo doc 1 (CI), codigoExcepcion 0, complemento en tag
+    $clienteCi = Cliente::create([
+        'nombres' => 'Carlos',
+        'ap_paterno' => 'Mendoza',
+        'cedula' => '4892015',
+        'complemento' => '1A',
+        'razon_social' => 'CARLOS MENDOZA',
+        'estado' => 'ACTIVO',
+    ]);
+    $fCi = Factura::create([
+        'sucursal_id' => $sucursal->id,
+        'punto_venta_id' => $puntoVenta->id,
+        'cufd_id' => $cufd->id,
+        'caja_id' => $caja->id,
+        'cliente_id' => $clienteCi->id,
+        'usuario_creador_id' => $user->id,
+        'numero_factura' => '104',
+        'nit' => '4892015',
+        'razon_social' => 'CARLOS MENDOZA',
+        'fecha' => now(),
+        'total' => 10.00,
+        'cuf' => 'CUF104',
+        'estado' => 'EMITIDA',
+    ]);
+    $xml4 = $service->construirXmlFacturaCompraVenta($fCi);
+    expect($xml4)->toContain('<codigoTipoDocumentoIdentidad>1</codigoTipoDocumentoIdentidad>')
+        ->and($xml4)->toContain('<numeroDocumento>4892015</numeroDocumento>')
+        ->and($xml4)->toContain('<complemento>1A</complemento>')
+        ->and($xml4)->toContain('<codigoExcepcion>0</codigoExcepcion>');
+});
+
+test('pos blocks sale equal or greater than 1000 Bs if customer is generic S/N (99001) per SIN regulation', function () {
+    $user = User::factory()->admin()->create();
+    $sucursal = Sucursal::factory()->create(['codigo_sucursal' => 0]);
+    $puntoVenta = PuntoVenta::create([
+        'sucursal_id' => $sucursal->id,
+        'nombre' => 'Caja Central 1',
+        'codigo' => 0,
+        'estado' => 'ACTIVO',
+    ]);
+    Cufd::create([
+        'usuario_creador_id' => $user->id,
+        'sucursal_id' => $sucursal->id,
+        'punto_venta_id' => $puntoVenta->id,
+        'codigo_ambiente' => 2,
+        'codigo' => 'B0A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q7R8S9T0',
+        'codigo_control' => 'CONTROL123456',
+        'direccion' => 'Av. Central 123',
+        'fecha_vigencia' => now()->addDay(),
+        'estado' => 'ACTIVO',
+    ]);
+    $caja = Caja::factory()->create([
+        'usuario_id' => $user->id,
+        'sucursal_id' => $sucursal->id,
+        'punto_venta_id' => $puntoVenta->id,
+        'monto_apertura' => 100.00,
+        'saldo' => 100.00,
+        'estado' => 'ABIERTA',
+    ]);
+
+    $producto = Producto::create([
+        'nombre' => 'Tratamiento Oncológico Especial',
+        'codigo' => 'MED-1000',
+        'precio_venta' => 1500.00,
+        'precio_compra' => 1200.00,
+        'stock_minimo' => 1,
+        'unidad_medida_sin' => 57,
+        'codigo_producto_sin' => '1003655',
+        'actividad_economica' => '4772100',
+        'estado' => 'ACTIVO',
+    ]);
+
+    $lote = Lote::create([
+        'producto_id' => $producto->id,
+        'sucursal_id' => $sucursal->id,
+        'numero_lote' => 'LOT-CARO-01',
+        'fecha_vencimiento' => Carbon::now()->addMonths(6)->toDateString(),
+        'stock_inicial' => 5,
+        'stock_actual' => 5,
+        'precio_compra' => 1200.00,
+        'precio_venta' => 1500.00,
+        'estado' => 'ACTIVO',
+    ]);
+
+    $clienteNominativo = Cliente::create([
+        'nombres' => 'Fernando',
+        'ap_paterno' => 'Quiroga',
+        'cedula' => '5432109',
+        'razon_social' => 'FERNANDO QUIROGA',
+        'estado' => 'ACTIVO',
+    ]);
+
+    // 1. Intentar vender con cliente por defecto S/N (id = 1, nit = 99001) por Bs. 1.500
+    Livewire::actingAs($user)
+        ->test(Pos::class)
+        ->call('seleccionarProducto', $producto->id)
+        ->set('cantidadAgregar', 1)
+        ->call('agregarAlCarrito')
+        ->set('montoEfectivo', 1500.00)
+        ->call('procesarVenta')
+        ->assertDispatched('swal-alert', function (string $eventName, array $params) {
+            return $params['icon'] === 'warning' && str_contains($params['title'], 'Identificación Obligatoria');
+        });
+
+    expect(Factura::count())->toBe(0);
+
+    // 2. Ahora seleccionar cliente nominativo con CI 5432109 y procesar la venta
+    Livewire::actingAs($user)
+        ->test(Pos::class)
+        ->call('seleccionarProducto', $producto->id)
+        ->set('cantidadAgregar', 1)
+        ->call('agregarAlCarrito')
+        ->call('seleccionarCliente', $clienteNominativo->id)
+        ->set('montoEfectivo', 1500.00)
+        ->call('procesarVenta')
+        ->assertDispatched('swal-alert', function (string $eventName, array $params) {
+            return $params['icon'] === 'success';
+        });
+
+    expect(Factura::count())->toBe(1);
+    $factura = Factura::first();
+    expect((float) $factura->total)->toBe(1500.00)
+        ->and($factura->nit)->toBe('5432109')
+        ->and($factura->razon_social)->toBe('FERNANDO QUIROGA');
 });

@@ -169,7 +169,7 @@
                             </label>
                             <select wire:model.live="selectedLoteId" 
                                     class="w-full py-1.5 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 font-mono">
-                                <option value="AUTO_FEFO">Despacho Automático FEFO (Total Disp: {{ number_format($lotesProducto->sum('stock_actual'), 0) }} und)</option>
+                                <option value="AUTO_FEFO">Despacho Automático FEFO (Total Disp: {{ number_format(collect($lotesProducto)->sum('stock_actual'), 0) }} und)</option>
                                 @foreach($lotesProducto as $loteOpt)
                                     <option value="{{ $loteOpt->id }}">
                                         Lote: {{ $loteOpt->numero_lote }} | Vence: {{ \Carbon\Carbon::parse($loteOpt->fecha_vencimiento)->format('d/m/Y') }} | Disp: {{ number_format($loteOpt->stock_actual, 0) }}
@@ -350,12 +350,35 @@
                         <span class="text-slate-400 text-[11px]">NIT / Cédula Identidad:</span>
                         <span class="font-mono font-bold text-teal-600 dark:text-teal-400">{{ $clienteDocumento }}</span>
                     </div>
-                    @if($clienteId === 1)
-                        <span class="inline-block text-[10px] text-amber-600 dark:text-amber-400 font-medium">
-                            <i class="fas fa-info-circle mr-0.5"></i> Cliente general por defecto (Consumidor S/N)
-                        </span>
-                    @endif
+                    <div class="flex items-center justify-between pt-1">
+                        @if($clienteId === 1)
+                            <span class="inline-block text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                                <i class="fas fa-info-circle mr-0.5"></i> Consumidor Final S/N (NIT: 99001)
+                            </span>
+                        @else
+                            <button type="button" wire:click="asignarClienteDefault" class="text-[10px] text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 font-medium flex items-center gap-1">
+                                <i class="fas fa-undo text-[9px]"></i> Cambiar a Consumidor Final (S/N)
+                            </button>
+                        @endif
+                    </div>
                 </div>
+
+                @php
+                    $esClienteSinNombre = ($clienteId === 1 || trim((string) $clienteDocumento) === '99001' || strtoupper(trim((string) $clienteRazonSocial)) === 'S/N' || empty(trim((string) $clienteDocumento)));
+                    $bloqueoMontoMil = ($totalCarrito >= 1000.00 && $esClienteSinNombre);
+                @endphp
+
+                @if($bloqueoMontoMil)
+                    <div class="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs flex items-start gap-2 shadow-sm animate-pulse">
+                        <i class="fas fa-exclamation-triangle text-rose-500 mt-0.5 shrink-0 text-sm"></i>
+                        <div class="space-y-1">
+                            <span class="font-bold block">Venta ≥ Bs. 1.000: Identificación Obligatoria</span>
+                            <span class="text-[11px] leading-tight block text-rose-700 dark:text-rose-300">
+                                Por normativa del SIN (RND 102100000011 / RND 102300000021), no se permite facturar con "S/N" (99001). Debe registrar o seleccionar un cliente con CI o NIT (presione <b class="underline">F3</b> o <b class="underline">+ Nuevo</b>).
+                            </span>
+                        </div>
+                    </div>
+                @endif
             </div>
 
             <!-- 2. Resumen de Totales y Descuento General -->
@@ -460,7 +483,7 @@
                 <button type="button" 
                         wire:click="procesarVenta"
                         wire:loading.attr="disabled"
-                        {{ ! $caja || count($carrito) === 0 || $faltaCobrar > 0.009 ? 'disabled' : '' }}
+                        {{ ! $caja || count($carrito) === 0 || $faltaCobrar > 0.009 || $bloqueoMontoMil ? 'disabled' : '' }}
                         class="w-full py-3.5 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-extrabold text-sm shadow-md shadow-teal-600/20 transition-all flex items-center justify-center gap-2 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed">
                     <span wire:loading.remove wire:target="procesarVenta">
                         <i class="fas fa-print mr-1"></i> COBRAR Y FACTURAR SIAT (F4)
@@ -469,6 +492,11 @@
                         <i class="fas fa-spinner fa-spin mr-1"></i> Facturando en SIAT...
                     </span>
                 </button>
+                @if($bloqueoMontoMil)
+                    <p class="text-center text-[10px] text-rose-600 dark:text-rose-400 font-bold flex items-center justify-center gap-1">
+                        <i class="fas fa-lock"></i> Bloqueado: Ingrese CI/NIT del comprador para montos ≥ Bs. 1.000
+                    </p>
+                @endif
             </div>
         </div>
     </div>
@@ -491,39 +519,64 @@
                 </div>
 
                 <form wire:submit.prevent="guardarNuevoCliente" class="p-5 space-y-3">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                            Nombres <span class="text-rose-500">*</span>
-                        </label>
-                        <input type="text" wire:model="nuevoClienteNombres" placeholder="Ej: Carlos"
-                               class="w-full py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
-                        @error('nuevoClienteNombres') <span class="text-[11px] text-rose-500 mt-0.5 block">{{ $message }}</span> @enderror
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                            Apellidos
-                        </label>
-                        <input type="text" wire:model="nuevoClienteApellidos" placeholder="Ej: Mendoza"
-                               class="w-full py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-2">
+                    <div class="grid grid-cols-2 gap-2.5">
                         <div>
                             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                                NIT / Cédula Identidad <span class="text-rose-500">*</span>
+                                Nombres <span class="text-rose-500">*</span>
                             </label>
-                            <input type="text" wire:model="nuevoClienteDocumento" placeholder="Ej: 4892011"
-                                   class="w-full py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
-                            @error('nuevoClienteDocumento') <span class="text-[11px] text-rose-500 mt-0.5 block">{{ $message }}</span> @enderror
+                            <input type="text" wire:model.live.debounce.300ms="nuevoClienteNombres" placeholder="Ej: Carlos"
+                                   class="w-full py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
+                            @error('nuevoClienteNombres') <span class="text-[11px] text-rose-500 mt-0.5 block">{{ $message }}</span> @enderror
                         </div>
 
                         <div>
                             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                                Complemento (SEGIP)
+                                Apellidos
                             </label>
-                            <input type="text" wire:model="nuevoClienteComplemento" placeholder="Ej: 1A"
-                                   class="w-full py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
+                            <input type="text" wire:model.live.debounce.300ms="nuevoClienteApellidos" placeholder="Ej: Mendoza"
+                                   class="w-full py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
+                        </div>
+                    </div>
+
+                    <!-- Bloque de Identificación: Campos Separados para CI y NIT -->
+                    <div class="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                <i class="fas fa-id-card text-teal-500"></i> Documentos de Identidad
+                            </span>
+                            <span class="text-[10px] text-slate-400 font-normal">
+                                (Llenar C.I. o NIT)
+                            </span>
+                        </div>
+
+                        <!-- Cédula de Identidad y Complemento -->
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="col-span-2">
+                                <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                                    Cédula de Identidad (C.I.)
+                                </label>
+                                <input type="text" wire:model="nuevoClienteCedula" placeholder="Ej: 4892015"
+                                       class="w-full py-1.5 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
+                                @error('nuevoClienteCedula') <span class="text-[10px] text-rose-500 mt-0.5 block">{{ $message }}</span> @enderror
+                            </div>
+
+                            <div>
+                                <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                                    Complemento
+                                </label>
+                                <input type="text" wire:model="nuevoClienteComplemento" placeholder="Ej: 1A"
+                                       class="w-full py-1.5 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono uppercase text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
+                            </div>
+                        </div>
+
+                        <!-- NIT exclusivo -->
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                                NIT (Número de Identificación Tributaria)
+                            </label>
+                            <input type="text" wire:model="nuevoClienteNit" placeholder="Ej: 1028475027"
+                                   class="w-full py-1.5 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
+                            @error('nuevoClienteNit') <span class="text-[10px] text-rose-500 mt-0.5 block">{{ $message }}</span> @enderror
                         </div>
                     </div>
 
