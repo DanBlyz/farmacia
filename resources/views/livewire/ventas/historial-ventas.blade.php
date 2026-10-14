@@ -413,10 +413,10 @@
                 <!-- Contenido Ticket 80mm -->
                 <div class="p-5 space-y-3 bg-white" id="ticketReimpresion">
                     <div class="text-center space-y-0.5">
-                        <h2 class="font-extrabold text-sm uppercase tracking-wider">{{ config('siat.razon_social', 'FARMACIA KERIGMA') }}</h2>
+                        <h2 class="font-extrabold text-sm uppercase tracking-wider">{{ config('siat.razon_social') }}</h2>
                         <p class="text-[10px]">{{ $facturaImpresion->sucursal?->nombre }}</p>
                         <p class="text-[10px]">{{ $facturaImpresion->sucursal?->direccion }}</p>
-                        <p class="text-[10px]">Tel: {{ config('siat.celular', '77272241') }} - {{ config('siat.municipio', 'LA PAZ') }}</p>
+                        <p class="text-[10px]">Tel: {{ config('siat.celular') }} - {{ config('siat.municipio') }}</p>
                     </div>
 
                     <div class="border-t border-b border-dashed border-slate-400 py-1.5 text-[11px] text-center font-bold">

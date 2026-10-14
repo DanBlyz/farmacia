@@ -29,7 +29,7 @@ class SiatFacturacionService
      */
     public function obtenerCufdVigente(int $sucursalId, int $puntoVentaId): ?Cufd
     {
-        $codigoAmbiente = (int) config('siat.codigo_ambiente', 2);
+        $codigoAmbiente = (int) config('siat.codigo_ambiente');
 
         $cufdVigente = Cufd::where('sucursal_id', $sucursalId)
             ->where('punto_venta_id', $puntoVentaId)
@@ -76,7 +76,7 @@ class SiatFacturacionService
                 return $nuevoCufd;
             }
         } catch (Exception $e) {
-            Log::warning('No se pudo renovar CUFD automáticamente: '.$e->getMessage());
+            Log::warning('No se pudo renovar CUFD automáticamente: ' . $e->getMessage());
         }
 
         // Retornar último CUFD conocido como fallback de contingencia
@@ -128,11 +128,11 @@ class SiatFacturacionService
         );
 
         $digitoModulo11 = $this->calcularModulo11($cadenaBase);
-        $cadenaConDigito = $cadenaBase.$digitoModulo11;
+        $cadenaConDigito = $cadenaBase . $digitoModulo11;
 
         $cadenaHex = $this->dec2hex($cadenaConDigito);
 
-        return $cadenaHex.$codigoControlCufd;
+        return $cadenaHex . $codigoControlCufd;
     }
 
     /**
@@ -175,7 +175,7 @@ class SiatFacturacionService
         $hex = '';
         while (bccomp($decimal, '0') > 0) {
             $mod = (int) bcmod($decimal, '16');
-            $hex = dechex($mod).$hex;
+            $hex = dechex($mod) . $hex;
             $decimal = bcdiv($decimal, '16', 0);
         }
 
@@ -193,13 +193,13 @@ class SiatFacturacionService
         PuntoVenta $puntoVenta,
         ?string $usuario = null
     ): string {
-        $nitEmisor = config('siat.nit', '698610039');
-        $razonSocialEmisor = config('siat.razon_social', 'FARMACIA KERIGMA');
-        $municipio = config('siat.municipio', 'LA PAZ');
-        $telefono = config('siat.celular', '77272241');
+        $nitEmisor = config('siat.nit');
+        $razonSocialEmisor = config('siat.razon_social');
+        $municipio = config('siat.municipio');
+        $telefono = config('siat.celular');
         $direccion = $cufd->direccion ?: ($sucursal->direccion ?: 'Av. Principal Central');
 
-        $fechaEmisionIso = Carbon::parse($factura->fecha)->format('Y-m-d\TH:i:s').'.000';
+        $fechaEmisionIso = Carbon::parse($factura->fecha)->format('Y-m-d\TH:i:s') . '.000';
 
         // Normalización de datos del cliente según normativa SIAT (RND 102100000011)
         $cliente = $factura->cliente;
@@ -250,11 +250,11 @@ class SiatFacturacionService
             // El complemento solo es válido para Cédula de Identidad (Tipo 1); para NIT siempre es nil
             $complemento = $cliente?->complemento ? trim($cliente->complemento) : null;
             $complementoTag = ($codigoTipoDoc === 1 && $complemento)
-                ? '<complemento>'.htmlspecialchars($complemento).'</complemento>'
+                ? '<complemento>' . htmlspecialchars($complemento) . '</complemento>'
                 : '<complemento xsi:nil="true"/>';
 
             $razonSocialCliente = htmlspecialchars($razonSocialRaw ?: 'S/N');
-            $codigoCliente = 'CLI-'.$numeroDoc;
+            $codigoCliente = 'CLI-' . $numeroDoc;
 
             // Código de Excepción: Solo aplica para NIT (tipo 5).
             // En fuera de línea (tipoEmision = 2 o contingencia), el SIN exige enviar siempre 1 para NIT.
@@ -268,18 +268,18 @@ class SiatFacturacionService
 
         $leyendaSin = $this->obtenerLeyendaNormativa();
 
-        $xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'."\n";
-        $xml .= '<facturaComputarizadaCompraVenta xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="facturaComputarizadaCompraVenta.xsd">'."\n";
+        $xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
+        $xml .= '<facturaComputarizadaCompraVenta xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="facturaComputarizadaCompraVenta.xsd">' . "\n";
         $xml .= "    <cabecera>\n";
         $xml .= "        <nitEmisor>{$nitEmisor}</nitEmisor>\n";
-        $xml .= '        <razonSocialEmisor>'.htmlspecialchars($razonSocialEmisor)."</razonSocialEmisor>\n";
-        $xml .= '        <municipio>'.htmlspecialchars($municipio)."</municipio>\n";
-        $xml .= '        <telefono>'.htmlspecialchars($telefono)."</telefono>\n";
+        $xml .= '        <razonSocialEmisor>' . htmlspecialchars($razonSocialEmisor) . "</razonSocialEmisor>\n";
+        $xml .= '        <municipio>' . htmlspecialchars($municipio) . "</municipio>\n";
+        $xml .= '        <telefono>' . htmlspecialchars($telefono) . "</telefono>\n";
         $xml .= "        <numeroFactura>{$factura->numero_factura}</numeroFactura>\n";
         $xml .= "        <cuf>{$factura->cuf}</cuf>\n";
         $xml .= "        <cufd>{$cufd->codigo}</cufd>\n";
         $xml .= "        <codigoSucursal>{$sucursal->codigo_sucursal}</codigoSucursal>\n";
-        $xml .= '        <direccion>'.htmlspecialchars($direccion)."</direccion>\n";
+        $xml .= '        <direccion>' . htmlspecialchars($direccion) . "</direccion>\n";
         $xml .= "        <codigoPuntoVenta>{$puntoVenta->codigo}</codigoPuntoVenta>\n";
         $xml .= "        <fechaEmision>{$fechaEmisionIso}</fechaEmision>\n";
         $xml .= "        <nombreRazonSocial>{$razonSocialCliente}</nombreRazonSocial>\n";
@@ -287,20 +287,28 @@ class SiatFacturacionService
         $xml .= "        <numeroDocumento>{$numeroDoc}</numeroDocumento>\n";
         $xml .= "        {$complementoTag}\n";
         $xml .= "        <codigoCliente>{$codigoCliente}</codigoCliente>\n";
-        $xml .= '        <codigoMetodoPago>'.($factura->codigo_metodo_pago ?: 1)."</codigoMetodoPago>\n";
+        $xml .= '        <codigoMetodoPago>' . ($factura->codigo_metodo_pago ?: 1) . "</codigoMetodoPago>\n";
         $xml .= "        <numeroTarjeta xsi:nil=\"true\"/>\n";
-        $xml .= '        <montoTotal>'.number_format((float) $factura->total, 2, '.', '')."</montoTotal>\n";
+        $xml .= '        <montoTotal>' . number_format((float) $factura->total, 2, '.', '') . "</montoTotal>\n";
         $montoSujetoIva = (float) ($factura->monto_total_subjeto_iva ?? $factura->monto_total_sujeto_iva ?? $factura->total);
-        $xml .= '        <montoTotalSujetoIva>'.number_format($montoSujetoIva, 2, '.', '')."</montoTotalSujetoIva>\n";
+        $xml .= '        <montoTotalSujetoIva>' . number_format($montoSujetoIva, 2, '.', '') . "</montoTotalSujetoIva>\n";
         $xml .= "        <codigoMoneda>1</codigoMoneda>\n";
         $xml .= "        <tipoCambio>1</tipoCambio>\n";
-        $xml .= '        <montoTotalMoneda>'.number_format((float) $factura->total, 2, '.', '')."</montoTotalMoneda>\n";
+        $xml .= '        <montoTotalMoneda>' . number_format((float) $factura->total, 2, '.', '') . "</montoTotalMoneda>\n";
         $xml .= "        <montoGiftCard xsi:nil=\"true\"/>\n";
-        $xml .= '        <descuentoAdicional>'.number_format((float) ($factura->descuento_adicional ?? 0), 2, '.', '')."</descuentoAdicional>\n";
+        $descuentoAdicional = number_format((float) ($factura->descuento_adicional ?? 0), 2, '.', '');
+        $xml .= "        <descuentoAdicional>{$descuentoAdicional}</descuentoAdicional>\n";
         $xml .= "        <codigoExcepcion>{$codigoExcepcion}</codigoExcepcion>\n";
-        $xml .= "        <cafc xsi:nil=\"true\"/>\n";
-        $xml .= '        <leyenda>'.htmlspecialchars($leyendaSin)."</leyenda>\n";
-        $xml .= '        <usuario>'.htmlspecialchars($usuario ?: (Auth::user()?->usuario ?: 'cajero'))."</usuario>\n";
+        $cafcValor = ! empty($factura->numero_cafc) ? trim((string) $factura->numero_cafc) : null;
+        if (! $cafcValor && in_array($factura->estado, ['PENDIENTE_ENVIO', 'EN_CONTINGENCIA'])) {
+            $cafcValor = config('siat.cafc');
+        }
+        $cafcTag = (! empty($cafcValor))
+            ? '<cafc>' . htmlspecialchars($cafcValor) . '</cafc>'
+            : '<cafc xsi:nil="true"/>';
+        $xml .= "        {$cafcTag}\n";
+        $xml .= '        <leyenda>' . htmlspecialchars($leyendaSin) . "</leyenda>\n";
+        $xml .= '        <usuario>' . htmlspecialchars($usuario ?: (Auth::user()?->usuario ?: 'cajero')) . "</usuario>\n";
         $xml .= "        <codigoDocumentoSector>1</codigoDocumentoSector>\n";
         $xml .= "    </cabecera>\n";
 
@@ -308,7 +316,7 @@ class SiatFacturacionService
             $prod = $det->producto;
             $actividadEconomica = $prod?->actividad_economica ?: '4772100';
             $codigoProductoSin = $prod?->codigo_producto_sin ?: '1003655';
-            $codigoProducto = $prod?->codigo ?: 'MED-'.str_pad((string) $det->producto_id, 4, '0', STR_PAD_LEFT);
+            $codigoProducto = $prod?->codigo ?: 'MED-' . str_pad((string) $det->producto_id, 4, '0', STR_PAD_LEFT);
             $descripcion = htmlspecialchars($det->nombre_producto ?: ($prod?->nombre ?: 'Medicamento'));
             $cantidad = number_format((float) $det->cantidad, 2, '.', '');
             $unidadMedida = $prod?->unidad_medida_sin ?: 57;
@@ -361,8 +369,8 @@ class SiatFacturacionService
         $hashSha256 = $this->calcularHashSha256($comprimido);
 
         $urlApi = new UrlApiServicio;
-        $codigoAmbiente = (int) config('siat.codigo_ambiente', 2);
-        $codigoModalidad = (int) config('siat.codigo_modalidad', 2);
+        $codigoAmbiente = (int) config('siat.codigo_ambiente');
+        $codigoModalidad = (int) config('siat.codigo_modalidad');
 
         $urlServicioModel = $urlApi->getUrlFacturacionCompraVenta($codigoAmbiente, $codigoModalidad);
         $urlServicio = is_object($urlServicioModel) ? $urlServicioModel->url_servicio : (string) $urlServicioModel;
@@ -397,7 +405,7 @@ class SiatFacturacionService
         $header = config('siat.api_token');
         $nit = config('siat.nit');
         $codigoSistema = config('siat.codigo_sistema');
-        $fechaEnvioIso = Carbon::parse($factura->fecha)->format('Y-m-d\TH:i:s').'.000';
+        $fechaEnvioIso = Carbon::parse($factura->fecha)->format('Y-m-d\TH:i:s') . '.000';
 
         try {
             $respRaw = $this->siatController->recepcionFactura(
@@ -459,7 +467,7 @@ class SiatFacturacionService
             return [
                 'success' => false,
                 'codigo_recepcion' => null,
-                'mensaje' => 'Excepción SOAP: '.$e->getMessage(),
+                'mensaje' => 'Excepción SOAP: ' . $e->getMessage(),
                 'en_contingencia' => true,
             ];
         }
@@ -477,7 +485,7 @@ class SiatFacturacionService
         if (now()->isAfter($fechaLimite)) {
             return [
                 'success' => false,
-                'mensaje' => 'El plazo legal para anular esta factura expiró el '.$fechaLimite->format('d/m/Y').' (día 9 del mes siguiente).',
+                'mensaje' => 'El plazo legal para anular esta factura expiró el ' . $fechaLimite->format('d/m/Y') . ' (día 9 del mes siguiente).',
             ];
         }
 
@@ -490,8 +498,8 @@ class SiatFacturacionService
         }
 
         $urlApi = new UrlApiServicio;
-        $codigoAmbiente = (int) config('siat.codigo_ambiente', 2);
-        $codigoModalidad = (int) config('siat.codigo_modalidad', 2);
+        $codigoAmbiente = (int) config('siat.codigo_ambiente');
+        $codigoModalidad = (int) config('siat.codigo_modalidad');
         $urlServicioModel = $urlApi->getUrlFacturacionOperaciones($codigoAmbiente, $codigoModalidad)
             ?? $urlApi->getUrlFacturacionCompraVenta($codigoAmbiente, $codigoModalidad);
         $urlServicio = is_object($urlServicioModel) ? $urlServicioModel->url_servicio : $urlServicioModel;
@@ -569,7 +577,7 @@ class SiatFacturacionService
             ];
         } catch (Exception $e) {
             // Si el servidor del SIN está inaccesible o es ambiente local, loguear
-            Log::warning('Error de comunicación SOAP al anular: '.$e->getMessage());
+            Log::warning('Error de comunicación SOAP al anular: ' . $e->getMessage());
 
             return [
                 'success' => true,
@@ -584,10 +592,10 @@ class SiatFacturacionService
      */
     public function generarUrlQr(Factura $factura): string
     {
-        $nit = config('siat.nit', '698610039');
+        $nit = config('siat.nit');
         $cuf = $factura->cuf;
         $numero = $factura->numero_factura;
-        $ambiente = (int) config('siat.codigo_ambiente', 2);
+        $ambiente = (int) config('siat.codigo_ambiente');
 
         $host = ($ambiente === 1) ? 'https://siat.impuestos.gob.bo' : 'https://pilotosiat.impuestos.gob.bo';
 
@@ -631,8 +639,8 @@ class SiatFacturacionService
         }
 
         $urlApi = new UrlApiServicio;
-        $codigoAmbiente = (int) config('siat.codigo_ambiente', 2);
-        $codigoModalidad = (int) config('siat.codigo_modalidad', 2);
+        $codigoAmbiente = (int) config('siat.codigo_ambiente');
+        $codigoModalidad = (int) config('siat.codigo_modalidad');
         $urlOperacionesModel = $urlApi->getUrlFacturacionOperaciones($codigoAmbiente, $codigoModalidad);
         $urlOperaciones = is_object($urlOperacionesModel) ? $urlOperacionesModel->url_servicio : (string) $urlOperacionesModel;
 
@@ -644,8 +652,8 @@ class SiatFacturacionService
             ];
         }
 
-        $fechaIniIso = Carbon::parse($fechaIni)->format('Y-m-d\TH:i:s').'.000';
-        $fechaFinIso = Carbon::parse($fechaFin)->format('Y-m-d\TH:i:s').'.000';
+        $fechaIniIso = Carbon::parse($fechaIni)->format('Y-m-d\TH:i:s') . '.000';
+        $fechaFinIso = Carbon::parse($fechaFin)->format('Y-m-d\TH:i:s') . '.000';
         $descFinal = $descripcion ? trim($descripcion) : $tipoEvento->descripcion;
 
         try {
@@ -706,7 +714,7 @@ class SiatFacturacionService
             return [
                 'success' => false,
                 'codigo_recepcion' => null,
-                'mensaje' => 'Excepción SOAP: '.$e->getMessage(),
+                'mensaje' => 'Excepción SOAP: ' . $e->getMessage(),
             ];
         }
     }
@@ -783,13 +791,13 @@ class SiatFacturacionService
      */
     public function construirPaqueteTarGz(iterable $facturas): array
     {
-        $tempDir = storage_path('app/temp_paquetes/'.uniqid('pkg_'));
+        $tempDir = storage_path('app/temp_paquetes/' . uniqid('pkg_'));
         if (! is_dir($tempDir)) {
             mkdir($tempDir, 0777, true);
         }
 
-        $tarPath = $tempDir.'/paquete.tar';
-        $gzPath = $tarPath.'.gz';
+        $tarPath = $tempDir . '/paquete.tar';
+        $gzPath = $tarPath . '.gz';
 
         try {
             $phar = new \PharData($tarPath);
@@ -826,7 +834,7 @@ class SiatFacturacionService
                 'bytes' => '',
                 'hash' => '',
                 'cantidad' => 0,
-                'error' => 'Error al comprimir TAR.GZ: '.$e->getMessage(),
+                'error' => 'Error al comprimir TAR.GZ: ' . $e->getMessage(),
             ];
         } finally {
             @unlink($tarPath);
@@ -885,11 +893,15 @@ class SiatFacturacionService
         $cuis = Cuis::where('punto_venta_id', $puntoVenta->id)->where('estado', 'ACTIVO')->latest('id')->first();
 
         $urlApi = new UrlApiServicio;
-        $codigoAmbiente = (int) config('siat.codigo_ambiente', 2);
-        $codigoModalidad = (int) config('siat.codigo_modalidad', 2);
+        $codigoAmbiente = (int) config('siat.codigo_ambiente');
+        $codigoModalidad = (int) config('siat.codigo_modalidad');
         $urlFacturacion = $urlApi->getUrlFacturacionCompraVenta($codigoAmbiente, $codigoModalidad)->url_servicio;
 
         $fechaEnvioIso = now('America/La_Paz')->format('Y-m-d\TH:i:s.000');
+
+        $evento->loadMissing('tipoEvento');
+        $motivoClasificador = (int) ($evento->tipoEvento?->codigo_clasificador ?? 0);
+        $cafcPaquete = in_array($motivoClasificador, [5, 6, 7]) ? config('siat.cafc') : null;
 
         try {
             $respRaw = $this->siatController->recepcionPaqueteFactura(
@@ -909,7 +921,7 @@ class SiatFacturacionService
                 $paqueteCompilado['bytes'],
                 $fechaEnvioIso,
                 $paqueteCompilado['hash'],
-                null,
+                $cafcPaquete,
                 $paqueteCompilado['cantidad'],
                 (int) $evento->codigo_recepcion
             );
@@ -932,7 +944,7 @@ class SiatFacturacionService
                     'estado' => $codigoDescripcion,
                     'cantidad_facturas' => $paqueteCompilado['cantidad'],
                     'hash_archivo' => $paqueteCompilado['hash'],
-                    'nombre_archivo' => "paquete_ev_{$evento->id}_".date('Ymd_His').'.tar.gz',
+                    'nombre_archivo' => "paquete_ev_{$evento->id}_" . date('Ymd_His') . '.tar.gz',
                     'fecha_envio' => now('America/La_Paz'),
                 ]);
 
@@ -963,7 +975,7 @@ class SiatFacturacionService
         } catch (\Throwable $e) {
             return [
                 'success' => false,
-                'mensaje' => 'Excepción SOAP en recepción de paquete: '.$e->getMessage(),
+                'mensaje' => 'Excepción SOAP en recepción de paquete: ' . $e->getMessage(),
             ];
         }
     }
@@ -984,8 +996,8 @@ class SiatFacturacionService
         $cuis = Cuis::where('punto_venta_id', $puntoVenta->id)->where('estado', 'ACTIVO')->latest('id')->first();
 
         $urlApi = new UrlApiServicio;
-        $codigoAmbiente = (int) config('siat.codigo_ambiente', 2);
-        $codigoModalidad = (int) config('siat.codigo_modalidad', 2);
+        $codigoAmbiente = (int) config('siat.codigo_ambiente');
+        $codigoModalidad = (int) config('siat.codigo_modalidad');
         $urlFacturacion = $urlApi->getUrlFacturacionCompraVenta($codigoAmbiente, $codigoModalidad)->url_servicio;
 
         try {
@@ -1046,7 +1058,7 @@ class SiatFacturacionService
 
             $mensajeEstado = ($codigoEstado == 901 || $codigoDescripcion === 'PENDIENTE')
                 ? 'El SIN ha recibido el paquete y se encuentra en su cola de procesamiento (901 PENDIENTE). Espere unos instantes y presione nuevamente "Validar en SIAT".'
-                : "Estado del paquete: {$codigoDescripcion} (Código {$codigoEstado}). ".($mensajesList ? json_encode($mensajesList, JSON_UNESCAPED_UNICODE) : '');
+                : "Estado del paquete: {$codigoDescripcion} (Código {$codigoEstado}). " . ($mensajesList ? json_encode($mensajesList, JSON_UNESCAPED_UNICODE) : '');
 
             return [
                 'success' => false,
@@ -1058,7 +1070,7 @@ class SiatFacturacionService
         } catch (\Throwable $e) {
             return [
                 'success' => false,
-                'mensaje' => 'Excepción SOAP en validación de paquete: '.$e->getMessage(),
+                'mensaje' => 'Excepción SOAP en validación de paquete: ' . $e->getMessage(),
             ];
         }
     }
@@ -1108,9 +1120,9 @@ class SiatFacturacionService
             if ($d === 1) {
                 $res[] = $decenas10[$u];
             } elseif ($d === 2 && $u > 0) {
-                $res[] = 'VEINTI'.$unidades[$u];
+                $res[] = 'VEINTI' . $unidades[$u];
             } elseif ($d > 0) {
-                $res[] = ($u > 0) ? $decenas[$d].' Y '.$unidades[$u] : $decenas[$d];
+                $res[] = ($u > 0) ? $decenas[$d] . ' Y ' . $unidades[$u] : $decenas[$d];
             } elseif ($u > 0) {
                 $res[] = $unidades[$u];
             }
@@ -1122,13 +1134,13 @@ class SiatFacturacionService
         if ($enteros >= 1000) {
             $miles = (int) floor($enteros / 1000);
             $resto = (int) ($enteros % 1000);
-            $txtMiles = ($miles === 1) ? 'MIL' : $convertirMenor1000($miles).' MIL';
+            $txtMiles = ($miles === 1) ? 'MIL' : $convertirMenor1000($miles) . ' MIL';
             $txtResto = ($resto > 0) ? $convertirMenor1000($resto) : '';
-            $resultado = trim($txtMiles.' '.$txtResto);
+            $resultado = trim($txtMiles . ' ' . $txtResto);
         } else {
             $resultado = $convertirMenor1000($enteros);
         }
 
-        return trim($resultado)." CON {$centavosStr}/100 BOLIVIANOS";
+        return trim($resultado) . " CON {$centavosStr}/100 BOLIVIANOS";
     }
 }

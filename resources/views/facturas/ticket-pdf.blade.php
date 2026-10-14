@@ -172,11 +172,11 @@
 <body>
     <!-- 1. Encabezado de la Farmacia -->
     <div class="header-box text-center">
-        <div class="empresa-nombre uppercase">{{ config('siat.razon_social', 'FARMACIA KERIGMA') }}</div>
+        <div class="empresa-nombre uppercase">{{ config('siat.razon_social') }}</div>
         <div class="sub-header font-bold">{{ $factura->sucursal?->nombre ?? 'Casa Matriz' }}</div>
         <div class="sub-header">{{ $factura->sucursal?->direccion ?? 'Av. Principal N° 100' }}</div>
-        <div class="sub-header">Tel: {{ config('siat.celular', '77272241') }} - {{ config('siat.municipio', 'LA PAZ') }}</div>
-        <div class="sub-header font-bold">NIT: {{ config('siat.nit', '123456789') }}</div>
+        <div class="sub-header">Tel: {{ config('siat.celular') }} - {{ config('siat.municipio') }}</div>
+        <div class="sub-header font-bold">NIT: {{ config('siat.nit') }}</div>
     </div>
 
     <!-- 2. Información Fiscal de la Factura y CUF -->

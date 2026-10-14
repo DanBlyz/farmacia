@@ -30,7 +30,7 @@ class Cuis extends Model
 
     public function cuisVigente($sucursal_id, $punto_venta_id, $codigoAmbiente = null)
     {
-        $codigoAmbiente = $codigoAmbiente ?: config('siat.codigo_ambiente', env('CODIGO_AMBIENTE', 2));
+        $codigoAmbiente = $codigoAmbiente ?: config('siat.codigo_ambiente');
 
         return Cuis::where('punto_venta_id', $punto_venta_id)
             ->where('sucursal_id', $sucursal_id)

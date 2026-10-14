@@ -555,7 +555,7 @@ class Pos extends Component
 
         if ($totalPagado < round($totalAPagar - 0.009, 2)) {
             $falta = max(0, round($totalAPagar - $totalPagado, 2));
-            $this->dispatch('swal-alert', icon: 'warning', title: 'Pago Insuficiente', message: 'El total pagado no cubre el monto de la compra. Faltan Bs. '.number_format($falta, 2));
+            $this->dispatch('swal-alert', icon: 'warning', title: 'Pago Insuficiente', message: 'El total pagado no cubre el monto de la compra. Faltan Bs. ' . number_format($falta, 2));
 
             return;
         }
@@ -578,9 +578,9 @@ class Pos extends Component
         // Obtener Correlativo y Parámetros para CUF
         $numeroFactura = $siatService->obtenerSiguienteNumeroFactura($sucursal->id, $puntoVenta->id);
         $fechaActual = now();
-        $fechaHoraCadena = $fechaActual->format('YmdHis').'000';
-        $nitEmisor = config('siat.nit', '698610039');
-        $codigoModalidad = (int) config('siat.codigo_modalidad', 2);
+        $fechaHoraCadena = $fechaActual->format('YmdHis') . '000';
+        $nitEmisor = config('siat.nit');
+        $codigoModalidad = (int) config('siat.codigo_modalidad');
 
         $cuf = $siatService->calcularCuf(
             $nitEmisor,
@@ -776,10 +776,9 @@ class Pos extends Component
                 : "¡Venta completada! Factura registrada en contingencia ({$factura->estado}).";
 
             $this->dispatch('swal-alert', icon: 'success', title: '¡Venta Realizada!', message: $msg);
-
         } catch (Exception $e) {
             DB::rollBack();
-            Log::error('Error al procesar venta POS: '.$e->getMessage());
+            Log::error('Error al procesar venta POS: ' . $e->getMessage());
             $this->dispatch('swal-alert', icon: 'error', title: 'Error al Facturar', message: $e->getMessage());
         }
     }

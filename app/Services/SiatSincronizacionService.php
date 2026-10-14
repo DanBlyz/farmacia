@@ -133,77 +133,154 @@ class SiatSincronizacionService
             switch ($tipoCatalogo) {
                 case 'TipoDocumentoSector':
                     $respuestaJson = $this->siatController->sincronizarParametricaTipoDocumentoSector(
-                        $token, $url, $ambiente, $codigoPuntoVenta, $codigoSistema, $codigoSucursal, $cuis, $nit
+                        $token,
+                        $url,
+                        $ambiente,
+                        $codigoPuntoVenta,
+                        $codigoSistema,
+                        $codigoSucursal,
+                        $cuis,
+                        $nit
                     );
 
                     return $this->procesarListaParametricaGenerica($respuestaJson, TipoDocumentoSector::class, 'codigo_clasificador', $userId);
 
                 case 'TipoPuntoVenta':
                     $respuestaJson = $this->siatController->sincronizarParametricaTipoPuntoVenta(
-                        $token, $url, $ambiente, $codigoPuntoVenta, $codigoSistema, $codigoSucursal, $cuis, $nit
+                        $token,
+                        $url,
+                        $ambiente,
+                        $codigoPuntoVenta,
+                        $codigoSistema,
+                        $codigoSucursal,
+                        $cuis,
+                        $nit
                     );
 
                     return $this->procesarListaParametricaGenerica($respuestaJson, TipoPuntoVenta::class, 'codigo_clasificador', $userId);
 
                 case 'UnidadMedida':
                     $respuestaJson = $this->siatController->sincronizarParametricaUnidadMedida(
-                        $token, $url, $ambiente, $codigoPuntoVenta, $codigoSistema, $codigoSucursal, $cuis, $nit
+                        $token,
+                        $url,
+                        $ambiente,
+                        $codigoPuntoVenta,
+                        $codigoSistema,
+                        $codigoSucursal,
+                        $cuis,
+                        $nit
                     );
 
                     return $this->procesarListaParametricaGenerica($respuestaJson, UnidadMedida::class, 'codigo_clasificador', $userId);
 
                 case 'TipoDocumentoIdentidad':
                     $respuestaJson = $this->siatController->sincronizarParametricaTipoDocumentoIdentidad(
-                        $token, $url, $ambiente, $codigoPuntoVenta, $codigoSistema, $codigoSucursal, $cuis, $nit
+                        $token,
+                        $url,
+                        $ambiente,
+                        $codigoPuntoVenta,
+                        $codigoSistema,
+                        $codigoSucursal,
+                        $cuis,
+                        $nit
                     );
 
                     return $this->procesarListaParametricaGenerica($respuestaJson, TipoDocumentoIdentidad::class, 'codigo_clasificador', $userId);
 
                 case 'TipoMetodoPago':
                     $respuestaJson = $this->siatController->sincronizarParametricaTipoMetodoPago(
-                        $token, $url, $ambiente, $codigoPuntoVenta, $codigoSistema, $codigoSucursal, $cuis, $nit
+                        $token,
+                        $url,
+                        $ambiente,
+                        $codigoPuntoVenta,
+                        $codigoSistema,
+                        $codigoSucursal,
+                        $cuis,
+                        $nit
                     );
 
                     return $this->procesarListaParametricaGenerica($respuestaJson, TipoMetodoPago::class, 'tipo_clasificador', $userId);
 
                 case 'TipoMoneda':
                     $respuestaJson = $this->siatController->sincronizarParametricaTipoMoneda(
-                        $token, $url, $ambiente, $codigoPuntoVenta, $codigoSistema, $codigoSucursal, $cuis, $nit
+                        $token,
+                        $url,
+                        $ambiente,
+                        $codigoPuntoVenta,
+                        $codigoSistema,
+                        $codigoSucursal,
+                        $cuis,
+                        $nit
                     );
 
                     return $this->procesarListaParametricaGenerica($respuestaJson, TipoMoneda::class, 'tipo_clasificador', $userId);
 
                 case 'MotivoAnulacion':
                     $respuestaJson = $this->siatController->sincronizarParametricaMotivoAnulacion(
-                        $token, $url, $ambiente, $codigoPuntoVenta, $codigoSistema, $codigoSucursal, $cuis, $nit
+                        $token,
+                        $url,
+                        $ambiente,
+                        $codigoPuntoVenta,
+                        $codigoSistema,
+                        $codigoSucursal,
+                        $cuis,
+                        $nit
                     );
 
                     return $this->procesarListaParametricaGenerica($respuestaJson, MotivoAnulacion::class, 'codigo_clasificador', $userId);
 
                 case 'TipoEventoSignificativo':
                     $respuestaJson = $this->siatController->sincronizarParametricaEventosSignificativos(
-                        $token, $url, $ambiente, $codigoPuntoVenta, $codigoSistema, $codigoSucursal, $cuis, $nit
+                        $token,
+                        $url,
+                        $ambiente,
+                        $codigoPuntoVenta,
+                        $codigoSistema,
+                        $codigoSucursal,
+                        $cuis,
+                        $nit
                     );
 
                     return $this->procesarListaParametricaGenerica($respuestaJson, TipoEventoSignificativo::class, 'codigo_clasificador', $userId);
 
                 case 'DependeActividad':
                     $respuestaJson = $this->siatController->sincronizarActividades(
-                        $token, $url, $ambiente, $codigoPuntoVenta, $codigoSistema, $codigoSucursal, $cuis, $nit
+                        $token,
+                        $url,
+                        $ambiente,
+                        $codigoPuntoVenta,
+                        $codigoSistema,
+                        $codigoSucursal,
+                        $cuis,
+                        $nit
                     );
 
                     return $this->procesarActividades($respuestaJson, $ambiente, $userId);
 
                 case 'ProductoServicio':
                     $respuestaJson = $this->siatController->sincronizarListaProductosServicios(
-                        $token, $url, $ambiente, $codigoPuntoVenta, $codigoSistema, $codigoSucursal, $cuis, $nit
+                        $token,
+                        $url,
+                        $ambiente,
+                        $codigoPuntoVenta,
+                        $codigoSistema,
+                        $codigoSucursal,
+                        $cuis,
+                        $nit
                     );
 
                     return $this->procesarProductosServicios($respuestaJson, $ambiente, $userId);
 
                 case 'LeyendaFactura':
                     $respuestaJson = $this->siatController->sincronizarListaLeyendasFactura(
-                        $token, $url, $ambiente, $codigoPuntoVenta, $codigoSistema, $codigoSucursal, $cuis, $nit
+                        $token,
+                        $url,
+                        $ambiente,
+                        $codigoPuntoVenta,
+                        $codigoSistema,
+                        $codigoSucursal,
+                        $cuis,
+                        $nit
                     );
 
                     return $this->procesarLeyendasFactura($respuestaJson, $ambiente, $userId);
@@ -218,7 +295,7 @@ class SiatSincronizacionService
         } catch (Exception $e) {
             return [
                 'success' => false,
-                'message' => 'Excepción durante la sincronización: '.$e->getMessage(),
+                'message' => 'Excepción durante la sincronización: ' . $e->getMessage(),
                 'count' => 0,
             ];
         }
@@ -261,11 +338,11 @@ class SiatSincronizacionService
      */
     public function obtenerContextoSiat(?int $sucursalId = null, ?int $puntoVentaCodigo = null): array
     {
-        $ambiente = (int) config('siat.codigo_ambiente', env('CODIGO_AMBIENTE', 2));
-        $modalidad = (int) config('siat.codigo_modalidad', env('CODIGO_MODALIDAD', 2));
-        $token = config('siat.api_token', env('API_TOKEN'));
-        $codigoSistema = config('siat.codigo_sistema', env('CODIGO_SISTEMA'));
-        $nit = config('siat.nit', env('NIT'));
+        $ambiente = (int) config('siat.codigo_ambiente');
+        $modalidad = (int) config('siat.codigo_modalidad');
+        $token = config('siat.api_token');
+        $codigoSistema = config('siat.codigo_sistema');
+        $nit = config('siat.nit');
 
         $sucursal = $sucursalId
             ? Sucursal::find($sucursalId)
@@ -360,7 +437,7 @@ class SiatSincronizacionService
 
             return [
                 'success' => false,
-                'message' => 'SIAT rechazó la transacción: '.($errorMsg ?: 'Error desconocido'),
+                'message' => 'SIAT rechazó la transacción: ' . ($errorMsg ?: 'Error desconocido'),
                 'count' => 0,
             ];
         }
@@ -370,7 +447,7 @@ class SiatSincronizacionService
 
         return [
             'success' => false,
-            'message' => 'Error SIAT: '.$msgFormatted,
+            'message' => 'Error SIAT: ' . $msgFormatted,
             'count' => 0,
         ];
     }
@@ -418,7 +495,7 @@ class SiatSincronizacionService
 
             $errorMsg = $this->extractSiatMensaje($resp->mensajesList ?? null);
 
-            return ['success' => false, 'message' => 'SIAT rechazó actividades: '.($errorMsg ?: 'Transacción fallida'), 'count' => 0];
+            return ['success' => false, 'message' => 'SIAT rechazó actividades: ' . ($errorMsg ?: 'Transacción fallida'), 'count' => 0];
         }
 
         return ['success' => false, 'message' => 'Error al comunicarse con SIAT para actividades.', 'count' => 0];
@@ -473,7 +550,7 @@ class SiatSincronizacionService
 
             $errorMsg = $this->extractSiatMensaje($resp->mensajesList ?? null);
 
-            return ['success' => false, 'message' => 'SIAT rechazó productos/servicios: '.($errorMsg ?: 'Transacción fallida'), 'count' => 0];
+            return ['success' => false, 'message' => 'SIAT rechazó productos/servicios: ' . ($errorMsg ?: 'Transacción fallida'), 'count' => 0];
         }
 
         return ['success' => false, 'message' => 'Error al comunicarse con SIAT para productos/servicios.', 'count' => 0];
@@ -527,7 +604,7 @@ class SiatSincronizacionService
 
             $errorMsg = $this->extractSiatMensaje($resp->mensajesList ?? null);
 
-            return ['success' => false, 'message' => 'SIAT rechazó leyendas: '.($errorMsg ?: 'Transacción fallida'), 'count' => 0];
+            return ['success' => false, 'message' => 'SIAT rechazó leyendas: ' . ($errorMsg ?: 'Transacción fallida'), 'count' => 0];
         }
 
         return ['success' => false, 'message' => 'Error al comunicarse con SIAT para leyendas de factura.', 'count' => 0];
