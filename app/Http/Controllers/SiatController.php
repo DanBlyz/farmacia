@@ -66,7 +66,6 @@ class SiatController extends Controller
             $data['estado'] = 'error';
             $data['resultado'] = $resultado;
             $data['msg'] = $fault;
-
         }
 
         return json_encode($data, JSON_UNESCAPED_UNICODE);
@@ -189,7 +188,8 @@ class SiatController extends Controller
         $nit,
         $tipoFacturaDocumento,
 
-        $codMot, $cuf1
+        $codMot,
+        $cuf1
     ) {
         // ESO VERIFICAR !!!!!!!!!!!!! OJOOOO !!!!!!!!!!! PIOJO!!!!!!!!!
         // $this->verificarConeccion();
@@ -331,7 +331,6 @@ class SiatController extends Controller
         }
 
         return json_encode($data, JSON_UNESCAPED_UNICODE);
-
     }
 
     public function consultaPuntoVenta($header, $url4, $codigoAmbiente, $codigoSistema, $codigoSucursal, $scuis, $nit)
@@ -439,7 +438,7 @@ class SiatController extends Controller
         return json_encode($data, JSON_UNESCAPED_UNICODE);
     }
 
-    public function cierrePuntoVenta($header, $url4, $codigoAmbiente, $codigoPuntoVenta, $codigoSistema, $codigoSucursal, $scuis, $nit)
+    /* public function cierrePuntoVenta($header, $url4, $codigoAmbiente, $codigoPuntoVenta, $codigoSistema, $codigoSucursal, $scuis, $nit)
     {
         $wsdl = $url4;
         $codigoAmbiente = $codigoAmbiente;
@@ -488,7 +487,7 @@ class SiatController extends Controller
         }
 
         return json_encode($data, JSON_UNESCAPED_UNICODE);
-    }
+    } */
 
     public function cierreOperacionesSistema($header, $url4, $codigoAmbiente, $codigoModalidad, $codigoPuntoVenta, $codigoSistema, $codigoSucursal, $scuis, $nit)
     {
@@ -1586,7 +1585,6 @@ class SiatController extends Controller
                     $cufdNew->save();
 
                     $cufdRescatadoUtilizar = $cufdNew;
-
                 } else {
                     $cufdRescatadoUtilizar = null;
                 }
@@ -1664,7 +1662,6 @@ class SiatController extends Controller
                 // dd($data);
 
                 return json_encode($data, JSON_UNESCAPED_UNICODE);
-
             } else {
                 $data['estado'] = 'error';
                 $data['resultado'] = $comunicacion->resultado;
@@ -1745,7 +1742,9 @@ class SiatController extends Controller
         $nit,
         $tipoFacturaDocumento,
 
-        $arch, $fecEnv, $hasArch
+        $arch,
+        $fecEnv,
+        $hasArch
     ) {
 
         // dd(
@@ -1841,7 +1840,11 @@ class SiatController extends Controller
         $scufd,
         $scuis,
         $nit,
-        $codMotEvent, $cufdEvent, $desc, $fechaIni, $fechaFin
+        $codMotEvent,
+        $cufdEvent,
+        $desc,
+        $fechaIni,
+        $fechaFin
     ) {
 
         $wsdl = $url4;
@@ -1920,7 +1923,12 @@ class SiatController extends Controller
         $nit,
         $tipoFacturaDocumento,
 
-        $arch, $fechaenv, $hasarch, $cafcC, $canFact, $codEvent
+        $arch,
+        $fechaenv,
+        $hasarch,
+        $cafcC,
+        $canFact,
+        $codEvent
     ) {
 
         $wsdl = $url3;
@@ -2009,7 +2017,8 @@ class SiatController extends Controller
         $nit,
         $tipoFacturaDocumento,
 
-        $codEmision, $codRecepcion
+        $codEmision,
+        $codRecepcion
     ) {
         $wsdl = $url3;
         $codigoAmbiente = $codigoAmbiente;

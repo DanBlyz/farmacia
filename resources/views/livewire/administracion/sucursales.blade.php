@@ -369,33 +369,33 @@
                     <div class="flex flex-wrap items-center gap-2.5">
                         <!-- Botón Registro Punto de Venta -->
                         <button type="button" 
-                                wire:click="openRegistroPuntoVentaModal({{ $selectedSucursalId }})"
+                                wire:click="openRegistroPuntoVentaModal"
                                 wire:loading.attr="disabled"
                                 class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-semibold text-xs shadow-sm flex items-center gap-2 transition-all focus:outline-none disabled:opacity-50"
                                 title="Registrar un nuevo punto de venta en SIAT para esta sucursal">
-                            <svg wire:loading.remove wire:target="openRegistroPuntoVentaModal({{ $selectedSucursalId }})" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
-                            <svg wire:loading wire:target="openRegistroPuntoVentaModal({{ $selectedSucursalId }})" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            <svg wire:loading.remove wire:target="openRegistroPuntoVentaModal" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                            <svg wire:loading wire:target="openRegistroPuntoVentaModal" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                             <span>Registro Punto Venta</span>
                         </button>
 
                         <!-- Botón Sincronización Punto de Ventas -->
                         <button type="button" 
-                                wire:click="sincronizarPuntosVenta({{ $selectedSucursalId }})"
+                                wire:click="sincronizarPuntosVenta"
                                 wire:loading.attr="disabled"
                                 class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-semibold text-xs shadow-sm flex items-center gap-2 transition-all focus:outline-none disabled:opacity-50">
-                            <svg wire:loading.remove wire:target="sincronizarPuntosVenta({{ $selectedSucursalId }})" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                            <svg wire:loading wire:target="sincronizarPuntosVenta({{ $selectedSucursalId }})" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            <svg wire:loading.remove wire:target="sincronizarPuntosVenta" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                            <svg wire:loading wire:target="sincronizarPuntosVenta" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                             <span>Sincronización Punto de Ventas</span>
                         </button>
 
                         <!-- Botón Cierre Operaciones de Sistema -->
                         <button type="button" 
-                                wire:click="cierreOperacionesSistema({{ $selectedSucursalId }})"
+                                wire:click="cierreOperacionesSistema"
                                 wire:loading.attr="disabled"
                                 class="px-3.5 py-2 rounded-xl bg-[#c72044] hover:bg-[#a61b38] text-white font-semibold text-xs shadow-sm flex items-center gap-2 transition-all focus:outline-none disabled:opacity-50"
                                 title="Cerrar operaciones del sistema con SIAT para esta sucursal">
-                            <svg wire:loading.remove wire:target="cierreOperacionesSistema({{ $selectedSucursalId }})" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                            <svg wire:loading wire:target="cierreOperacionesSistema({{ $selectedSucursalId }})" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            <svg wire:loading.remove wire:target="cierreOperacionesSistema" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                            <svg wire:loading wire:target="cierreOperacionesSistema" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                             <span>Cierre Operaciones de Sistema</span>
                         </button>
                     </div>
@@ -598,23 +598,6 @@
 
         window.addEventListener('sucursal-deleted', (event) => {
             window.showToastSwal('¡Eliminado!', event.detail.message, 'success');
-        });
-
-        window.addEventListener('swal-alert', (event) => {
-            const data = Array.isArray(event.detail) ? event.detail[0] : event.detail;
-            Swal.fire({
-                title: data.title || (data.icon === 'error' ? 'Atención SIAT' : '¡Éxito!'),
-                html: data.message,
-                icon: data.icon || 'info',
-                confirmButtonColor: data.icon === 'error' ? '#e11d48' : '#0d9488',
-                confirmButtonText: '<svg class="w-4 h-4 inline mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg> Entendido',
-                background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff',
-                color: document.documentElement.classList.contains('dark') ? '#f8fafc' : '#1e293b',
-                customClass: {
-                    popup: 'rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl font-sans p-6 text-left',
-                    confirmButton: 'px-5 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-white shadow-md transition-all'
-                }
-            });
         });
     });
 </script>

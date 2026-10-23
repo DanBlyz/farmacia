@@ -252,7 +252,38 @@ class PermisoSeeder extends Seeder
             ],
             [
                 'nombre' => 'ventas.facturas.anular',
-                'descripcion' => 'Anular facturas ante el SIAT con motivos reglamentados',
+                'descripcion' => 'Anular facturas previamente emitidas ante el SIAT',
+            ],
+            [
+                'nombre' => 'ventas.facturas.revertir_anulacion',
+                'descripcion' => 'Revertir anulación de facturas ante el SIAT',
+            ],
+            // ==========================================
+            // 6. MÓDULO SINCRONIZACIÓN Y SIAT
+            // ==========================================
+            [
+                'nombre' => 'sincronizacion.catalogos.ver',
+                'descripcion' => 'Ver catálogos sincronizados del SIAT',
+            ],
+            [
+                'nombre' => 'sincronizacion.catalogos.sincronizar',
+                'descripcion' => 'Sincronizar catálogos y listas desplegables del SIAT',
+            ],
+            [
+                'nombre' => 'sincronizacion.eventos.ver',
+                'descripcion' => 'Consultar eventos significativos y contingencias',
+            ],
+            [
+                'nombre' => 'sincronizacion.eventos.crear',
+                'descripcion' => 'Registrar y cerrar eventos significativos ante el SIAT',
+            ],
+            [
+                'nombre' => 'sincronizacion.paquetes.enviar',
+                'descripcion' => 'Empaquetar y transmitir facturas en contingencia al SIAT',
+            ],
+            [
+                'nombre' => 'sincronizacion.paquetes.validar',
+                'descripcion' => 'Validar paquetes de contingencia transmitidos ante el SIAT',
             ],
         ];
 

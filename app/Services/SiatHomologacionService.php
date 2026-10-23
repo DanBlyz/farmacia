@@ -109,6 +109,124 @@ class SiatHomologacionService
     }
 
     /**
+     * Ejecuta las pruebas de la Etapa I (Obtención de CUIS)
+     *
+     * @param  int|null  $pvFiltrado  1, 0 o null para ambos
+     * @param  callable|null  $onProgress  Callback ($registroActual, $totalRegistros, $info)
+     * @return array{total_intentos: int, exitosos: int, fallidos: int, detalle: array}
+     */
+    public function ejecutarEtapaCuis(
+        ?int $pvFiltrado = null,
+        ?callable $onProgress = null
+    ): array {
+        $pvs = $pvFiltrado !== null ? [$pvFiltrado] : [1, 0];
+        $ambiente = (int) config('siat.codigo_ambiente');
+        $modalidad = (int) config('siat.codigo_modalidad');
+        $token = config('siat.api_token');
+        $codigoSistema = config('siat.codigo_sistema');
+        $nit = (string) config('siat.nit');
+
+        $sucursal = Sucursal::orderBy('codigo_sucursal', 'asc')->first();
+        $urlCodigos = (new UrlApiServicio)->getUrlCodigos($ambiente, $modalidad);
+
+        $totalIntentos = 0;
+        $totalExitosos = 0;
+        $totalFallidos = 0;
+        $detalle = [];
+        $userId = Auth::id();
+
+        foreach ($pvs as $idx => $pv) {
+            $totalIntentos++;
+            $puntoVenta = PuntoVenta::where('sucursal_id', $sucursal?->id)
+                ->where('codigo', $pv)
+                ->first();
+
+            if (! $sucursal || ! $puntoVenta || ! $urlCodigos || ! $urlCodigos->url_servicio) {
+                $totalFallidos++;
+                $detalle[] = [
+                    'pv' => $pv,
+                    'exitosos' => 0,
+                    'fallidos' => 1,
+                    'error' => 'Configuración de sucursal, punto de venta o URL de códigos incompleta.',
+                ];
+
+                continue;
+            }
+
+            try {
+                $respuestaJson = $this->siatController->cuis(
+                    $token,
+                    $urlCodigos->url_servicio,
+                    $ambiente,
+                    $modalidad,
+                    $pv,
+                    $codigoSistema,
+                    (int) $sucursal->codigo_sucursal,
+                    $nit
+                );
+
+                $data = json_decode($respuestaJson);
+                if ($data && $data->estado === 'success' && isset($data->resultado->RespuestaCuis) && $data->resultado->RespuestaCuis->transaccion) {
+                    $respCuis = $data->resultado->RespuestaCuis;
+                    Cuis::create([
+                        'usuario_creador_id' => $userId,
+                        'punto_venta_id' => $puntoVenta->id,
+                        'sucursal_id' => $sucursal->id,
+                        'codigo' => $respCuis->codigo,
+                        'fecha_vigencia' => Carbon::parse($respCuis->fechaVigencia)->format('Y-m-d H:i:s'),
+                        'codigo_ambiente' => $ambiente,
+                        'estado' => 'ACTIVO',
+                    ]);
+
+                    $totalExitosos++;
+                    $detalle[] = [
+                        'pv' => $pv,
+                        'exitosos' => 1,
+                        'fallidos' => 0,
+                        'cuis' => $respCuis->codigo,
+                        'fecha_vigencia' => $respCuis->fechaVigencia,
+                    ];
+                } else {
+                    $totalFallidos++;
+                    $msg = $data->resultado->RespuestaCuis->mensajesList ?? $data->msg ?? $data->error ?? 'Transacción rechazada por SIAT';
+                    $detalle[] = [
+                        'pv' => $pv,
+                        'exitosos' => 0,
+                        'fallidos' => 1,
+                        'error' => is_string($msg) ? $msg : json_encode($msg, JSON_UNESCAPED_UNICODE),
+                    ];
+                }
+            } catch (\Throwable $e) {
+                $totalFallidos++;
+                $detalle[] = [
+                    'pv' => $pv,
+                    'exitosos' => 0,
+                    'fallidos' => 1,
+                    'error' => $e->getMessage(),
+                ];
+            }
+
+            if ($onProgress) {
+                $onProgress($idx + 1, count($pvs), [
+                    'pv' => $pv,
+                    'total' => 1,
+                    'exitosos' => $detalle[count($detalle) - 1]['exitosos'] ?? 0,
+                    'fallidos' => $detalle[count($detalle) - 1]['fallidos'] ?? 0,
+                    'cuis' => $detalle[count($detalle) - 1]['cuis'] ?? null,
+                    'error' => $detalle[count($detalle) - 1]['error'] ?? null,
+                ]);
+            }
+        }
+
+        return [
+            'total_intentos' => $totalIntentos,
+            'exitosos' => $totalExitosos,
+            'fallidos' => $totalFallidos,
+            'detalle' => $detalle,
+        ];
+    }
+
+    /**
      * Ejecuta las pruebas de la Etapa II (Sincronización de Catálogos)
      *
      * @param  int  $repeticiones  Cantidad de llamadas por registro (normalmente 50)
@@ -127,7 +245,7 @@ class SiatHomologacionService
         $metodos = $this->metodosCatalogos();
 
         if ($metodoFiltrado) {
-            $metodos = array_values(array_filter($metodos, fn($m) => $m['metodo'] === $metodoFiltrado));
+            $metodos = array_values(array_filter($metodos, fn ($m) => $m['metodo'] === $metodoFiltrado));
         }
 
         $totalRegistros = count($metodos) * count($pvs);
@@ -437,7 +555,7 @@ class SiatHomologacionService
                 try {
                     $fechaActual = now();
                     $numeroFactura = $siguienteFacturaBase + ($i - 1);
-                    $fechaHoraCadena = $fechaActual->format('YmdHis') . '000';
+                    $fechaHoraCadena = $fechaActual->format('YmdHis').'000';
                     $cuf = $facturacionService->calcularCuf(
                         $contexto['nit'],
                         $fechaHoraCadena,
@@ -479,7 +597,7 @@ class SiatHomologacionService
                     $xml = $facturacionService->generarXmlFactura($facturaDummy, $detalleDummy, $cufd, $sucursal, $puntoVentaModel);
                     $gzip = $facturacionService->comprimirXmlGzip($xml);
                     $hash = $facturacionService->calcularHashSha256($gzip);
-                    $fechaEnvioIso = $fechaActual->format('Y-m-d\TH:i:s') . '.000';
+                    $fechaEnvioIso = $fechaActual->format('Y-m-d\TH:i:s').'.000';
 
                     $respRaw = $this->siatController->recepcionFactura(
                         $contexto['token'],
@@ -514,7 +632,7 @@ class SiatHomologacionService
                         $ultimoError = $codigoDescripcion ?? ($resp['msg'] ?? 'Fallo SOAP en recepción individual');
                         if (! empty($resFacturacion['mensajesList'])) {
                             $msgs = is_array($resFacturacion['mensajesList']) ? $resFacturacion['mensajesList'] : [$resFacturacion['mensajesList']];
-                            $ultimoError .= ': ' . json_encode($msgs, JSON_UNESCAPED_UNICODE);
+                            $ultimoError .= ': '.json_encode($msgs, JSON_UNESCAPED_UNICODE);
                         }
                     }
                 } catch (Exception $e) {
@@ -693,8 +811,8 @@ class SiatHomologacionService
                         $cursorFecha = $inicioCufd->copy()->addMinutes(15 + ($intentosRetry * 5));
                     }
 
-                    $fechaIni = $cursorFecha->format('Y-m-d\TH:i:s') . '.000';
-                    $fechaFin = $cursorFecha->copy()->addMinute()->format('Y-m-d\TH:i:s') . '.000';
+                    $fechaIni = $cursorFecha->format('Y-m-d\TH:i:s').'.000';
+                    $fechaFin = $cursorFecha->copy()->addMinute()->format('Y-m-d\TH:i:s').'.000';
 
                     try {
                         $respRaw = $this->siatController->registroEventoSignificativo(
@@ -765,7 +883,7 @@ class SiatHomologacionService
 
                             $ultimoError = $resp['msg'] ?? 'Fallo en registro de evento';
                             if (! empty($resEvento['mensajesList'])) {
-                                $ultimoError .= ': ' . json_encode($msgArray, JSON_UNESCAPED_UNICODE);
+                                $ultimoError .= ': '.json_encode($msgArray, JSON_UNESCAPED_UNICODE);
                             }
                             $cursorFecha = $cursorFecha->addMinutes(3);
                             break;
@@ -859,7 +977,7 @@ class SiatHomologacionService
         }
 
         if ($pvFiltrado !== null) {
-            $casos = array_filter($casos, fn($c) => $c['pv'] === $pvFiltrado);
+            $casos = array_filter($casos, fn ($c) => $c['pv'] === $pvFiltrado);
         }
 
         $totalRegistros = count($casos);
@@ -922,7 +1040,7 @@ class SiatHomologacionService
             if ($tipoOperacion === 'envio') {
                 $tipoModel = TipoEventoSignificativo::where('codigo_clasificador', $motivo)->first();
                 $eventoDb = EventoSignificativo::where('punto_venta_id', $contexto['puntoVentaId'])
-                    ->when($tipoModel, fn($q) => $q->where('tipo_evento_significativo_id', $tipoModel->id))
+                    ->when($tipoModel, fn ($q) => $q->where('tipo_evento_significativo_id', $tipoModel->id))
                     ->whereNotNull('codigo_recepcion')
                     ->latest('id')
                     ->first();
@@ -934,12 +1052,12 @@ class SiatHomologacionService
                 try {
                     if ($tipoOperacion === 'envio') {
                         // Construir archivo .tar.gz comprimido
-                        $tempDir = storage_path('app/temp_paquetes/' . uniqid('homol_'));
+                        $tempDir = storage_path('app/temp_paquetes/'.uniqid('homol_'));
                         if (! is_dir($tempDir)) {
                             mkdir($tempDir, 0777, true);
                         }
-                        $tarPath = $tempDir . '/paquete.tar';
-                        $gzPath = $tarPath . '.gz';
+                        $tarPath = $tempDir.'/paquete.tar';
+                        $gzPath = $tarPath.'.gz';
 
                         $phar = new \PharData($tarPath);
                         $facturaXml = $this->prepararXmlFacturaHomologacion(
@@ -1010,7 +1128,7 @@ class SiatHomologacionService
                             $totalFallidos++;
                             $ultimoError = $resp['msg'] ?? ($resServicio['codigoDescripcion'] ?? 'Fallo en envío de paquete');
                             if (! empty($resServicio['mensajesList'])) {
-                                $ultimoError .= ': ' . json_encode($resServicio['mensajesList'], JSON_UNESCAPED_UNICODE);
+                                $ultimoError .= ': '.json_encode($resServicio['mensajesList'], JSON_UNESCAPED_UNICODE);
                             }
                         }
                     } else {
@@ -1082,7 +1200,7 @@ class SiatHomologacionService
                             $totalFallidos++;
                             $ultimoError = $codigoDescripcion ?: ($resp['msg'] ?? 'Fallo en validación de paquete');
                             if (! empty($mensajesList)) {
-                                $ultimoError .= ': ' . json_encode($mensajesList, JSON_UNESCAPED_UNICODE);
+                                $ultimoError .= ': '.json_encode($mensajesList, JSON_UNESCAPED_UNICODE);
                             }
                         }
                     }
@@ -1130,6 +1248,339 @@ class SiatHomologacionService
     }
 
     /**
+     * Ejecuta la ETAPA VII de Homologación: Anulación de Facturas (24 Casos: 12 en PV 1 + 12 en PV 0)
+     *
+     * @param  int  $repeticiones  Cantidad de facturas a anular por PV (normalmente 12)
+     * @param  int|null  $pvFiltrado  1, 0 o null para ambos
+     * @param  callable|null  $onProgress  Callback ($registroActual, $totalRegistros, $info)
+     * @return array{total_intentos: int, exitosos: int, fallidos: int, detalle: array}
+     */
+    public function ejecutarEtapaAnulacion(
+        int $repeticiones = 12,
+        ?int $pvFiltrado = null,
+        ?callable $onProgress = null
+    ): array {
+        $pvs = $pvFiltrado !== null ? [$pvFiltrado] : [1, 0];
+        $totalRegistros = count($pvs);
+        $registroIndex = 0;
+        $totalIntentos = 0;
+        $totalExitosos = 0;
+        $totalFallidos = 0;
+        $detalle = [];
+
+        $urlApi = new UrlApiServicio;
+        $ambiente = (int) config('siat.codigo_ambiente');
+        $modalidad = (int) config('siat.codigo_modalidad');
+        $urlCompraVenta = $urlApi->getUrlFacturacionCompraVenta($ambiente, $modalidad);
+
+        foreach ($pvs as $pv) {
+            $registroIndex++;
+            $contexto = $this->resolverContexto($pv);
+
+            if (! $contexto['success'] || ! $urlCompraVenta) {
+                $msg = $contexto['message'] ?? 'URL de Compra-Venta no configurada.';
+                $detalle[] = [
+                    'pv' => $pv,
+                    'exitosos' => 0,
+                    'fallidos' => $repeticiones,
+                    'error' => $msg,
+                ];
+                $totalIntentos += $repeticiones;
+                $totalFallidos += $repeticiones;
+
+                continue;
+            }
+
+            $cufd = Cufd::where('sucursal_id', $contexto['sucursalId'])
+                ->where('punto_venta_id', $contexto['puntoVentaId'])
+                ->where('fecha_vigencia', '>', now())
+                ->latest('id')
+                ->first() ?? Cufd::where('sucursal_id', $contexto['sucursalId'])->latest('id')->first();
+
+            if (! $cufd) {
+                $detalle[] = [
+                    'pv' => $pv,
+                    'exitosos' => 0,
+                    'fallidos' => $repeticiones,
+                    'error' => "Sin CUFD vigente para el Punto de Venta {$pv}.",
+                ];
+                $totalIntentos += $repeticiones;
+                $totalFallidos += $repeticiones;
+
+                continue;
+            }
+
+            // Facturas emitidas disponibles para anular
+            $facturas = Factura::where('punto_venta_id', $contexto['puntoVentaId'])
+                ->where('estado', 'VALIDADA')
+                ->latest('id')
+                ->take($repeticiones)
+                ->get();
+
+            $exitososRegistro = 0;
+            $fallidosRegistro = 0;
+            $ultimoError = null;
+
+            if ($facturas->count() < $repeticiones) {
+                $ultimoError = "Solo se encontraron {$facturas->count()} facturas con estado VALIDADA para PV {$pv} (se requieren {$repeticiones}).";
+            }
+
+            $iter = 0;
+            foreach ($facturas as $factura) {
+                $iter++;
+                $totalIntentos++;
+
+                try {
+                    $respRaw = $this->siatController->anulacionFactura(
+                        $contexto['token'],
+                        $urlCompraVenta->url_servicio,
+                        $contexto['ambiente'],
+                        1, // codigoDocumentoSector
+                        $contexto['modalidad'],
+                        $contexto['codigoPuntoVenta'],
+                        $contexto['codigoSistema'],
+                        $contexto['codigoSucursal'],
+                        $cufd->codigo,
+                        $contexto['cuis'],
+                        $contexto['nit'],
+                        1, // tipoFacturaDocumento
+                        1, // codigoMotivo = FACTURA MAL EMITIDA
+                        $factura->cuf
+                    );
+
+                    $resp = json_decode($respRaw, true);
+                    $resAnulacion = $resp['resultado']['RespuestaServicioAnulacionFactura'] ?? [];
+                    $transaccion = $resAnulacion['transaccion'] ?? false;
+                    $codigoEstado = $resAnulacion['codigoEstado'] ?? null;
+
+                    if (($resp['estado'] ?? '') === 'success' && ($transaccion === true || $codigoEstado == 905 || ($resAnulacion['codigoDescripcion'] ?? '') === 'ANULADA')) {
+                        $exitososRegistro++;
+                        $totalExitosos++;
+                        $factura->update([
+                            'estado' => 'ANULADA',
+                            'codigo_estado' => 905,
+                            'codigo_descripcion' => 'ANULADA',
+                        ]);
+                    } else {
+                        $fallidosRegistro++;
+                        $totalFallidos++;
+                        $ultimoError = $resAnulacion['codigoDescripcion'] ?? ($resp['msg'] ?? 'Fallo SOAP en anulación');
+                        if (! empty($resAnulacion['mensajesList'])) {
+                            $msgs = is_array($resAnulacion['mensajesList']) ? $resAnulacion['mensajesList'] : [$resAnulacion['mensajesList']];
+                            $ultimoError .= ': '.json_encode($msgs, JSON_UNESCAPED_UNICODE);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    $fallidosRegistro++;
+                    $totalFallidos++;
+                    $ultimoError = $e->getMessage();
+                }
+
+                if ($onProgress) {
+                    $onProgress($registroIndex, $totalRegistros, [
+                        'pv' => $pv,
+                        'iteracion' => $iter,
+                        'total_iteraciones' => $repeticiones,
+                        'exitosos' => $exitososRegistro,
+                        'fallidos' => $fallidosRegistro,
+                        'error' => $ultimoError,
+                    ]);
+                }
+
+                usleep(120000);
+            }
+
+            // Si faltaron facturas para alcanzar el número de repeticiones esperadas
+            $faltantes = $repeticiones - $facturas->count();
+            if ($faltantes > 0) {
+                $totalIntentos += $faltantes;
+                $fallidosRegistro += $faltantes;
+                $totalFallidos += $faltantes;
+            }
+
+            $detalle[] = [
+                'pv' => $pv,
+                'exitosos' => $exitososRegistro,
+                'fallidos' => $fallidosRegistro,
+                'error' => $ultimoError,
+            ];
+        }
+
+        return [
+            'total_intentos' => $totalIntentos,
+            'exitosos' => $totalExitosos,
+            'fallidos' => $totalFallidos,
+            'detalle' => $detalle,
+        ];
+    }
+
+    /**
+     * Ejecuta la ETAPA XI de Homologación: Reversión de Anulación (24 Casos: 12 en PV 1 + 12 en PV 0)
+     *
+     * @param  int  $repeticiones  Cantidad de facturas a revertir por PV (normalmente 12)
+     * @param  int|null  $pvFiltrado  1, 0 o null para ambos
+     * @param  callable|null  $onProgress  Callback ($registroActual, $totalRegistros, $info)
+     * @return array{total_intentos: int, exitosos: int, fallidos: int, detalle: array}
+     */
+    public function ejecutarEtapaReversion(
+        int $repeticiones = 12,
+        ?int $pvFiltrado = null,
+        ?callable $onProgress = null
+    ): array {
+        $pvs = $pvFiltrado !== null ? [$pvFiltrado] : [1, 0];
+        $totalRegistros = count($pvs);
+        $registroIndex = 0;
+        $totalIntentos = 0;
+        $totalExitosos = 0;
+        $totalFallidos = 0;
+        $detalle = [];
+
+        $urlApi = new UrlApiServicio;
+        $ambiente = (int) config('siat.codigo_ambiente');
+        $modalidad = (int) config('siat.codigo_modalidad');
+        $urlCompraVenta = $urlApi->getUrlFacturacionCompraVenta($ambiente, $modalidad);
+
+        foreach ($pvs as $pv) {
+            $registroIndex++;
+            $contexto = $this->resolverContexto($pv);
+
+            if (! $contexto['success'] || ! $urlCompraVenta) {
+                $msg = $contexto['message'] ?? 'URL de Compra-Venta no configurada.';
+                $detalle[] = [
+                    'pv' => $pv,
+                    'exitosos' => 0,
+                    'fallidos' => $repeticiones,
+                    'error' => $msg,
+                ];
+                $totalIntentos += $repeticiones;
+                $totalFallidos += $repeticiones;
+
+                continue;
+            }
+
+            $cufd = Cufd::where('sucursal_id', $contexto['sucursalId'])
+                ->where('punto_venta_id', $contexto['puntoVentaId'])
+                ->where('fecha_vigencia', '>', now())
+                ->latest('id')
+                ->first() ?? Cufd::where('sucursal_id', $contexto['sucursalId'])->latest('id')->first();
+
+            if (! $cufd) {
+                $detalle[] = [
+                    'pv' => $pv,
+                    'exitosos' => 0,
+                    'fallidos' => $repeticiones,
+                    'error' => "Sin CUFD vigente para el Punto de Venta {$pv}.",
+                ];
+                $totalIntentos += $repeticiones;
+                $totalFallidos += $repeticiones;
+
+                continue;
+            }
+
+            // Facturas anuladas disponibles para revertir
+            $facturas = Factura::where('punto_venta_id', $contexto['puntoVentaId'])
+                ->where('estado', 'ANULADA')
+                ->latest('id')
+                ->take($repeticiones)
+                ->get();
+
+            $exitososRegistro = 0;
+            $fallidosRegistro = 0;
+            $ultimoError = null;
+
+            if ($facturas->count() < $repeticiones) {
+                $ultimoError = "Solo se encontraron {$facturas->count()} facturas con estado ANULADA para PV {$pv} (se requieren {$repeticiones}).";
+            }
+
+            $iter = 0;
+            foreach ($facturas as $factura) {
+                $iter++;
+                $totalIntentos++;
+
+                try {
+                    $respRaw = $this->siatController->reversionAnulacionFactura(
+                        $contexto['token'],
+                        $urlCompraVenta->url_servicio,
+                        $contexto['ambiente'],
+                        1, // codigoDocumentoSector
+                        $contexto['modalidad'],
+                        $contexto['codigoPuntoVenta'],
+                        $contexto['codigoSistema'],
+                        $contexto['codigoSucursal'],
+                        $cufd->codigo,
+                        $contexto['cuis'],
+                        $contexto['nit'],
+                        1, // tipoFacturaDocumento
+                        $factura->cuf
+                    );
+
+                    $resp = json_decode($respRaw, true);
+                    $resReversion = $resp['resultado']['RespuestaServicioReversionAnulacionFactura'] ?? [];
+                    $transaccion = $resReversion['transaccion'] ?? false;
+                    $codigoEstado = $resReversion['codigoEstado'] ?? null;
+
+                    if (($resp['estado'] ?? '') === 'success' && ($transaccion === true || $codigoEstado == 908 || ($resReversion['codigoDescripcion'] ?? '') === 'VALIDADA')) {
+                        $exitososRegistro++;
+                        $totalExitosos++;
+                        $factura->update([
+                            'estado' => 'VALIDADA',
+                            'codigo_estado' => 908,
+                            'codigo_descripcion' => 'VALIDADA',
+                        ]);
+                    } else {
+                        $fallidosRegistro++;
+                        $totalFallidos++;
+                        $ultimoError = $resReversion['codigoDescripcion'] ?? ($resp['msg'] ?? 'Fallo SOAP en reversión');
+                        if (! empty($resReversion['mensajesList'])) {
+                            $msgs = is_array($resReversion['mensajesList']) ? $resReversion['mensajesList'] : [$resReversion['mensajesList']];
+                            $ultimoError .= ': '.json_encode($msgs, JSON_UNESCAPED_UNICODE);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    $fallidosRegistro++;
+                    $totalFallidos++;
+                    $ultimoError = $e->getMessage();
+                }
+
+                if ($onProgress) {
+                    $onProgress($registroIndex, $totalRegistros, [
+                        'pv' => $pv,
+                        'iteracion' => $iter,
+                        'total_iteraciones' => $repeticiones,
+                        'exitosos' => $exitososRegistro,
+                        'fallidos' => $fallidosRegistro,
+                        'error' => $ultimoError,
+                    ]);
+                }
+
+                usleep(120000);
+            }
+
+            // Si faltaron facturas para alcanzar el número de repeticiones esperadas
+            $faltantes = $repeticiones - $facturas->count();
+            if ($faltantes > 0) {
+                $totalIntentos += $faltantes;
+                $fallidosRegistro += $faltantes;
+                $totalFallidos += $faltantes;
+            }
+
+            $detalle[] = [
+                'pv' => $pv,
+                'exitosos' => $exitososRegistro,
+                'fallidos' => $fallidosRegistro,
+                'error' => $ultimoError,
+            ];
+        }
+
+        return [
+            'total_intentos' => $totalIntentos,
+            'exitosos' => $totalExitosos,
+            'fallidos' => $totalFallidos,
+            'detalle' => $detalle,
+        ];
+    }
+
+    /**
      * Guarda el código de recepción devuelto por el SIAT para persistirlo tanto en JSON como en BD.
      */
     public function guardarCodigoRecepcionPaquete(
@@ -1144,7 +1595,7 @@ class SiatHomologacionService
         if (! is_dir($dir)) {
             mkdir($dir, 0777, true);
         }
-        $file = $dir . '/homologacion_paquetes.json';
+        $file = $dir.'/homologacion_paquetes.json';
         $data = file_exists($file) ? (json_decode(file_get_contents($file), true) ?: []) : [];
         if (! isset($data[$pv])) {
             $data[$pv] = [];
@@ -1204,12 +1655,12 @@ class SiatHomologacionService
     private function generarYEnviarPaqueteRapido(array $contexto, string $urlFacturacion, Cufd $cufd, int $cantFacturas = 1): ?string
     {
         try {
-            $tempDir = storage_path('app/temp_paquetes/' . uniqid('quick_'));
+            $tempDir = storage_path('app/temp_paquetes/'.uniqid('quick_'));
             if (! is_dir($tempDir)) {
                 mkdir($tempDir, 0777, true);
             }
-            $tarPath = $tempDir . '/paquete.tar';
-            $gzPath = $tarPath . '.gz';
+            $tarPath = $tempDir.'/paquete.tar';
+            $gzPath = $tarPath.'.gz';
 
             $eventoDb = EventoSignificativo::where('punto_venta_id', $contexto['puntoVentaId'])
                 ->whereNotNull('codigo_recepcion')
@@ -1304,6 +1755,9 @@ class SiatHomologacionService
         // 1. Punto de Venta
         $xml = preg_replace('/<codigoPuntoVenta>.*?<\/codigoPuntoVenta>/', "<codigoPuntoVenta>{$pv}</codigoPuntoVenta>", $facturaXmlBase);
 
+        // 1.1 Número de Factura
+        $xml = preg_replace('/<numeroFactura>.*?<\/numeroFactura>/', "<numeroFactura>{$numeroFactura}</numeroFactura>", $xml);
+
         // 2. Fecha de Emisión acorde al Evento de Contingencia
         if ($eventoDb && $eventoDb->fecha_ini) {
             $fechaEmisionIso = Carbon::parse($eventoDb->fecha_ini)->addSeconds(10)->format('Y-m-d\TH:i:s.000');
@@ -1316,7 +1770,7 @@ class SiatHomologacionService
         $xml = preg_replace('/<cufd>.*?<\/cufd>/', "<cufd>{$cufd->codigo}</cufd>", $xml);
 
         // 4. CUF
-        $fechaCadena = Carbon::parse($fechaEmisionIso)->format('YmdHis') . '000';
+        $fechaCadena = Carbon::parse($fechaEmisionIso)->format('YmdHis').'000';
         $facturacionService = app(SiatFacturacionService::class);
         $cuf = $facturacionService->calcularCuf(
             $contexto['nit'],

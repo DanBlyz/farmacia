@@ -118,6 +118,24 @@
             </div>
 
             <div class="flex items-center gap-2.5 self-start sm:self-auto">
+                @permiso('sincronizacion.paquetes.validar')
+                <button type="button" 
+                        wire:click="validarTodosLosPaquetes"
+                        wire:loading.attr="disabled"
+                        wire:target="validarTodosLosPaquetes"
+                        title="Valida en lote todos los paquetes registrados pendientes de verificación en el SIAT"
+                        class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs sm:text-sm border border-slate-300 dark:border-slate-700 shadow-2xs transition duration-150 flex items-center gap-2 cursor-pointer disabled:opacity-50">
+                    <span wire:loading.remove wire:target="validarTodosLosPaquetes" class="flex items-center gap-2">
+                        <i class="fas fa-sync text-teal-600 dark:text-teal-400 text-xs"></i>
+                        <span>Validar Paquetes SIAT ({{ \App\Models\PaqueteFactura::whereIn('codigo_estado', [901, null])->orWhere('estado', 'PENDIENTE')->count() }})</span>
+                    </span>
+                    <span wire:loading wire:target="validarTodosLosPaquetes" class="flex items-center gap-2">
+                        <i class="fas fa-spinner fa-spin text-teal-600 dark:text-teal-400 text-xs"></i>
+                        <span>Validando en SIAT...</span>
+                    </span>
+                </button>
+                @endpermiso
+
                 @permiso('sincronizacion.eventos.crear')
                 <button type="button" 
                         wire:click="abrirModalCrear"

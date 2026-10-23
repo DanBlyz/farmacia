@@ -253,6 +253,17 @@
                                                 </button>
                                             @endif
                                         @endpermiso
+
+                                        <!-- Revertir Anulación -->
+                                        @if($factura->estado === 'ANULADA')
+                                            @anypermiso(['ventas.facturas.anular', 'ventas.facturas.revertir_anulacion'])
+                                                <button wire:click="confirmarReversion({{ $factura->id }})" 
+                                                        class="p-1.5 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                                                        title="Revertir Anulación en SIAT">
+                                                    <i class="fas fa-undo-alt text-xs"></i>
+                                                </button>
+                                            @endanypermiso
+                                        @endif
                                     </div>
                                 </td>
                             </tr>

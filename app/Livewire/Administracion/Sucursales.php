@@ -104,8 +104,8 @@ class Sucursales extends Component
         }
 
         $this->validate([
-            'nombre' => 'required|string|max:150|unique:sucursales,nombre,' . ($this->sucursalId ?? 'NULL') . ',id,deleted_at,NULL',
-            'codigo_sucursal' => 'required|string|max:50|unique:sucursales,codigo_sucursal,' . ($this->sucursalId ?? 'NULL') . ',id,deleted_at,NULL',
+            'nombre' => 'required|string|max:150|unique:sucursales,nombre,'.($this->sucursalId ?? 'NULL').',id,deleted_at,NULL',
+            'codigo_sucursal' => 'required|string|max:50|unique:sucursales,codigo_sucursal,'.($this->sucursalId ?? 'NULL').',id,deleted_at,NULL',
             'direccion' => 'nullable|string|max:255',
         ], [
             'nombre.required' => 'El nombre de la sucursal es obligatorio.',
@@ -224,7 +224,7 @@ class Sucursales extends Component
 
         $urlApi = (new UrlApiServicio)->getUrlCodigos($this->codigo_ambiente, $this->codigo_modalidad);
         if (! $urlApi || ! $urlApi->url_servicio) {
-            $msg = 'Error SIAT: No se encontró la URL de servicio "url_facturacionCodigos" para el ambiente ' . $this->codigo_ambiente . ' y modalidad ' . $this->codigo_modalidad;
+            $msg = 'Error SIAT: No se encontró la URL de servicio "url_facturacionCodigos" para el ambiente '.$this->codigo_ambiente.' y modalidad '.$this->codigo_modalidad;
             session()->flash('error', $msg);
             $this->dispatch('swal-alert', icon: 'error', title: 'Error Configuración SIAT', message: $msg);
 
@@ -248,33 +248,48 @@ class Sucursales extends Component
 
             if ($data && $data->estado === 'success' && isset($data->resultado->RespuestaCuis)) {
                 $respCuis = $data->resultado->RespuestaCuis;
-                if ($respCuis->transaccion) {
+                $codigoObtenido = $respCuis->codigo ?? null;
+                $esTransaccionExitosa = ! empty($respCuis->transaccion);
+                $esCuisVigenteExistente = ! empty($codigoObtenido) && isset($respCuis->mensajesList) && (
+                    (is_object($respCuis->mensajesList) && ($respCuis->mensajesList->codigo ?? 0) == 980) ||
+                    (is_array($respCuis->mensajesList) && collect($respCuis->mensajesList)->contains(fn ($m) => ($m->codigo ?? 0) == 980))
+                );
+
+                if ($esTransaccionExitosa || $esCuisVigenteExistente) {
+                    Cuis::where('punto_venta_id', $puntoVenta->id)
+                        ->where('estado', 'ACTIVO')
+                        ->update(['estado' => 'INACTIVO']);
+
                     Cuis::create([
                         'usuario_creador_id' => Auth::id(),
                         'punto_venta_id' => $puntoVenta->id,
                         'sucursal_id' => $sucursal->id,
-                        'codigo' => $respCuis->codigo,
+                        'codigo' => $codigoObtenido,
                         'fecha_vigencia' => Carbon::parse($respCuis->fechaVigencia)->format('Y-m-d H:i:s'),
                         'codigo_ambiente' => $this->codigo_ambiente,
                         'estado' => 'ACTIVO',
                     ]);
-                    $msgSuccess = 'CUIS obtenido y registrado exitosamente para el Punto de Venta: ' . $puntoVenta->nombre;
+
+                    $msgSuccess = $esTransaccionExitosa
+                        ? 'CUIS obtenido y registrado exitosamente para el Punto de Venta: '.$puntoVenta->nombre
+                        : 'Se sincronizó el CUIS vigente existente desde SIAT ('.$codigoObtenido.') para el Punto de Venta: '.$puntoVenta->nombre;
+
                     session()->flash('message', $msgSuccess);
-                    $this->dispatch('swal-alert', icon: 'success', title: '¡CUIS Generado!', message: $msgSuccess);
+                    $this->dispatch('swal-alert', icon: 'success', title: '¡CUIS Registrado!', message: $msgSuccess);
                 } else {
                     $mensaje = $this->extractSiatMensaje($respCuis->mensajesList ?? null);
-                    $msgError = 'SIAT rechazó la solicitud de CUIS: ' . ($mensaje ?: 'Transacción no autorizada por SIAT.');
+                    $msgError = 'SIAT rechazó la solicitud de CUIS: '.($mensaje ?: 'Transacción no autorizada por SIAT.');
                     session()->flash('error', $msgError);
                     $this->dispatch('swal-alert', icon: 'error', title: 'Rechazo SIAT', message: $msgError);
                 }
             } else {
                 $msg = $data->msg ?? $data->error ?? 'Error de comunicación o credenciales inválidas';
                 $msgFormatted = is_string($msg) ? $msg : json_encode($msg, JSON_UNESCAPED_UNICODE);
-                session()->flash('error', 'Error en petición al SIAT: ' . $msgFormatted);
+                session()->flash('error', 'Error en petición al SIAT: '.$msgFormatted);
                 $this->dispatch('swal-alert', icon: 'error', title: 'Error SIAT', message: $msgFormatted);
             }
         } catch (\Exception $e) {
-            $msgException = 'Excepción al solicitar CUIS: ' . $e->getMessage();
+            $msgException = 'Excepción al solicitar CUIS: '.$e->getMessage();
             session()->flash('error', $msgException);
             $this->dispatch('swal-alert', icon: 'error', title: 'Excepción SIAT', message: $msgException);
         }
@@ -348,18 +363,18 @@ class Sucursales extends Component
                     $this->dispatch('swal-alert', icon: 'success', title: '¡Actividades Sincronizadas!', message: $msgSuccess);
                 } else {
                     $mensaje = $this->extractSiatMensaje($resp->mensajesList ?? null);
-                    $msgError = 'SIAT rechazó la sincronización de actividades: ' . ($mensaje ?: 'Transacción fallida.');
+                    $msgError = 'SIAT rechazó la sincronización de actividades: '.($mensaje ?: 'Transacción fallida.');
                     session()->flash('error', $msgError);
                     $this->dispatch('swal-alert', icon: 'error', title: 'Rechazo SIAT', message: $msgError);
                 }
             } else {
                 $msg = $data->msg ?? $data->mensaje ?? 'Error al comunicarse con SIAT';
                 $msgFormatted = is_string($msg) ? $msg : json_encode($msg, JSON_UNESCAPED_UNICODE);
-                session()->flash('error', 'Error al sincronizar actividades: ' . $msgFormatted);
+                session()->flash('error', 'Error al sincronizar actividades: '.$msgFormatted);
                 $this->dispatch('swal-alert', icon: 'error', title: 'Error SIAT', message: $msgFormatted);
             }
         } catch (\Exception $e) {
-            $msgException = 'Excepción al sincronizar actividades: ' . $e->getMessage();
+            $msgException = 'Excepción al sincronizar actividades: '.$e->getMessage();
             session()->flash('error', $msgException);
             $this->dispatch('swal-alert', icon: 'error', title: 'Excepción SIAT', message: $msgException);
         }
@@ -439,27 +454,32 @@ class Sucursales extends Component
                     $this->dispatch('swal-alert', icon: 'success', title: '¡Catálogo Sincronizado!', message: $msgSuccess);
                 } else {
                     $mensaje = $this->extractSiatMensaje($resp->mensajesList ?? null);
-                    $msgError = 'SIAT rechazó la sincronización de productos/servicios: ' . ($mensaje ?: 'Transacción fallida.');
+                    $msgError = 'SIAT rechazó la sincronización de productos/servicios: '.($mensaje ?: 'Transacción fallida.');
                     session()->flash('error', $msgError);
                     $this->dispatch('swal-alert', icon: 'error', title: 'Rechazo SIAT', message: $msgError);
                 }
             } else {
                 $msg = $data->msg ?? $data->mensaje ?? 'Error de respuesta del SIAT';
                 $msgFormatted = is_string($msg) ? $msg : json_encode($msg, JSON_UNESCAPED_UNICODE);
-                session()->flash('error', 'Error al sincronizar productos/servicios: ' . $msgFormatted);
+                session()->flash('error', 'Error al sincronizar productos/servicios: '.$msgFormatted);
                 $this->dispatch('swal-alert', icon: 'error', title: 'Error SIAT', message: $msgFormatted);
             }
         } catch (\Exception $e) {
-            $msgException = 'Excepción al sincronizar productos/servicios: ' . $e->getMessage();
+            $msgException = 'Excepción al sincronizar productos/servicios: '.$e->getMessage();
             session()->flash('error', $msgException);
             $this->dispatch('swal-alert', icon: 'error', title: 'Excepción SIAT', message: $msgException);
         }
     }
 
-    public function sincronizarPuntosVenta(int $sucursalId): void
+    public function sincronizarPuntosVenta(?int $sucursalId = null): void
     {
         $this->inicializarVariables();
-        $sucursal = Sucursal::findOrFail($sucursalId);
+        $targetSucursalId = $sucursalId ?: $this->selectedSucursalId;
+        if (! $targetSucursalId) {
+            return;
+        }
+
+        $sucursal = Sucursal::findOrFail($targetSucursalId);
 
         $puntoVenta0 = PuntoVenta::where('sucursal_id', $sucursal->id)->orderBy('codigo', 'asc')->first();
         if (! $puntoVenta0) {
@@ -521,7 +541,7 @@ class Sucursales extends Component
                             'sucursal_id' => $sucursal->id,
                             'codigo' => $codigoPv,
                         ], [
-                            'nombre' => $item->nombrePuntoVenta ?? $item->nombre ?? ('Punto de Venta ' . $codigoPv),
+                            'nombre' => $item->nombrePuntoVenta ?? $item->nombre ?? ('Punto de Venta '.$codigoPv),
                             'tipo' => $item->tipoPuntoVenta ?? $item->tipo ?? 'VENTANILLA',
                             'codigo_ambiente' => $this->codigo_ambiente,
                         ]);
@@ -532,27 +552,32 @@ class Sucursales extends Component
                     $this->dispatch('swal-alert', icon: 'success', title: '¡Puntos de Venta Sincronizados!', message: $msgSuccess);
                 } else {
                     $mensaje = $this->extractSiatMensaje($resp->mensajesList ?? null);
-                    $msgError = 'SIAT rechazó la consulta de puntos de venta: ' . ($mensaje ?: 'Transacción fallida.');
+                    $msgError = 'SIAT rechazó la consulta de puntos de venta: '.($mensaje ?: 'Transacción fallida.');
                     session()->flash('error', $msgError);
                     $this->dispatch('swal-alert', icon: 'error', title: 'Rechazo SIAT', message: $msgError);
                 }
             } else {
                 $msg = $data->msg ?? $data->mensaje ?? 'Error de comunicación al consultar los puntos de venta con SIAT.';
                 $msgFormatted = is_string($msg) ? $msg : json_encode($msg, JSON_UNESCAPED_UNICODE);
-                session()->flash('error', 'Error al consultar puntos de venta: ' . $msgFormatted);
+                session()->flash('error', 'Error al consultar puntos de venta: '.$msgFormatted);
                 $this->dispatch('swal-alert', icon: 'error', title: 'Error SIAT', message: $msgFormatted);
             }
         } catch (\Exception $e) {
-            $msgException = 'Excepción al consultar puntos de venta: ' . $e->getMessage();
+            $msgException = 'Excepción al consultar puntos de venta: '.$e->getMessage();
             session()->flash('error', $msgException);
             $this->dispatch('swal-alert', icon: 'error', title: 'Excepción SIAT', message: $msgException);
         }
     }
 
-    public function cierreOperacionesSistema(int $sucursalId): void
+    public function cierreOperacionesSistema(?int $sucursalId = null): void
     {
         $this->inicializarVariables();
-        $sucursal = Sucursal::findOrFail($sucursalId);
+        $targetSucursalId = $sucursalId ?: $this->selectedSucursalId;
+        if (! $targetSucursalId) {
+            return;
+        }
+
+        $sucursal = Sucursal::findOrFail($targetSucursalId);
 
         $puntoVenta0 = PuntoVenta::where('sucursal_id', $sucursal->id)->orderBy('codigo', 'asc')->first();
         if (! $puntoVenta0) {
@@ -597,34 +622,74 @@ class Sucursales extends Component
 
             $data = json_decode($respuestaJson);
 
-            $resp = $data->resultado->RespuestaCierreOperacionesSistema ?? $data->resultado->RespuestaOperaciones ?? null;
+            $resp = $data->resultado->RespuestaCierreSistemas
+                ?? $data->resultado->RespuestaCierreOperacionesSistema
+                ?? $data->resultado->RespuestaOperaciones
+                ?? null;
+
             if ($data && $data->estado === 'success' && $resp) {
                 if ($resp->transaccion) {
-                    $msgSuccess = "El Cierre de Operaciones del Sistema fue registrado y autorizado exitosamente en SIAT para la sucursal \"{$sucursal->nombre}\".";
+                    // Inactivar todos los CUIS locales de la sucursal para permitir su renovación inmediata
+                    Cuis::where('sucursal_id', $sucursal->id)
+                        ->where('estado', 'ACTIVO')
+                        ->update([
+                            'estado' => 'INACTIVO',
+                            'fecha_vigencia' => now()->subMinute(),
+                        ]);
+
+                    $msgSuccess = "El Cierre de Operaciones del Sistema fue registrado y autorizado exitosamente en SIAT para la sucursal \"{$sucursal->nombre}\". Ya puede obtener un nuevo CUIS.";
                     session()->flash('message', $msgSuccess);
                     $this->dispatch('swal-alert', icon: 'success', title: '¡Cierre de Operaciones Exitoso!', message: $msgSuccess);
                 } else {
-                    $mensaje = $this->extractSiatMensaje($resp->mensajesList ?? null);
-                    $msgError = 'SIAT rechazó el Cierre de Operaciones: ' . ($mensaje ?: 'Transacción rechazada.');
-                    session()->flash('error', $msgError);
-                    $this->dispatch('swal-alert', icon: 'error', title: 'Rechazo SIAT', message: $msgError);
+                    $codMensaje = 0;
+                    if (isset($resp->mensajesList)) {
+                        if (is_object($resp->mensajesList) && isset($resp->mensajesList->codigo)) {
+                            $codMensaje = (int) $resp->mensajesList->codigo;
+                        } elseif (is_array($resp->mensajesList) && isset($resp->mensajesList[0]->codigo)) {
+                            $codMensaje = (int) $resp->mensajesList[0]->codigo;
+                        }
+                    }
+
+                    if ($codMensaje === 913) {
+                        // El CUIS ya no era válido o ya estaba cerrado en SIAT
+                        Cuis::where('sucursal_id', $sucursal->id)
+                            ->where('estado', 'ACTIVO')
+                            ->update([
+                                'estado' => 'INACTIVO',
+                                'fecha_vigencia' => now()->subMinute(),
+                            ]);
+
+                        $msgAviso = 'SIAT informó que el CUIS enviado ya se encuentra cerrado o inválido (Código 913). Se ha actualizado el estado local para que pueda generar o renovar su CUIS de inmediato.';
+                        session()->flash('message', $msgAviso);
+                        $this->dispatch('swal-alert', icon: 'info', title: 'CUIS Ya Cerrado en SIAT', message: $msgAviso);
+                    } else {
+                        $mensaje = $this->extractSiatMensaje($resp->mensajesList ?? null);
+                        $msgError = 'SIAT rechazó el Cierre de Operaciones: '.($mensaje ?: 'Transacción rechazada.');
+                        session()->flash('error', $msgError);
+                        $this->dispatch('swal-alert', icon: 'error', title: 'Rechazo SIAT', message: $msgError);
+                    }
                 }
             } else {
                 $msg = $data->msg ?? $data->mensaje ?? 'Error al comunicarse con SIAT para el Cierre de Operaciones de Sistema.';
                 $msgFormatted = is_string($msg) ? $msg : json_encode($msg, JSON_UNESCAPED_UNICODE);
-                session()->flash('error', 'Error en Cierre de Operaciones: ' . $msgFormatted);
+                session()->flash('error', 'Error en Cierre de Operaciones: '.$msgFormatted);
                 $this->dispatch('swal-alert', icon: 'error', title: 'Error SIAT', message: $msgFormatted);
             }
         } catch (\Exception $e) {
-            $msgException = 'Excepción al solicitar Cierre de Operaciones: ' . $e->getMessage();
+            $msgException = 'Excepción al solicitar Cierre de Operaciones: '.$e->getMessage();
             session()->flash('error', $msgException);
             $this->dispatch('swal-alert', icon: 'error', title: 'Excepción SIAT', message: $msgException);
         }
     }
 
-    public function openRegistroPuntoVentaModal(int $sucursalId): void
+    public function openRegistroPuntoVentaModal(?int $sucursalId = null): void
     {
-        $sucursal = Sucursal::findOrFail($sucursalId);
+        $targetSucursalId = $sucursalId ?: $this->selectedSucursalId;
+        if (! $targetSucursalId) {
+            return;
+        }
+
+        $sucursal = Sucursal::findOrFail($targetSucursalId);
         $this->selectedSucursalId = $sucursal->id;
         $this->selectedSucursalNombre = (string) $sucursal->nombre;
         $this->reset(['newPuntoVentaNombre', 'newPuntoVentaDescripcion', 'newPuntoVentaTipoId']);
@@ -733,18 +798,18 @@ class Sucursales extends Component
                     $this->closeRegistroPuntoVentaModal();
                 } else {
                     $mensaje = $this->extractSiatMensaje($resp->mensajesList ?? null);
-                    $msgError = 'SIAT rechazó el registro de Punto de Venta: ' . ($mensaje ?: 'Transacción rechazada.');
+                    $msgError = 'SIAT rechazó el registro de Punto de Venta: '.($mensaje ?: 'Transacción rechazada.');
                     session()->flash('error', $msgError);
                     $this->dispatch('swal-alert', icon: 'error', title: 'Rechazo SIAT', message: $msgError);
                 }
             } else {
                 $msg = $data->msg ?? $data->mensaje ?? 'Error de respuesta del servidor SIAT al registrar el punto de venta.';
                 $msgFormatted = is_string($msg) ? $msg : json_encode($msg, JSON_UNESCAPED_UNICODE);
-                session()->flash('error', 'Error en registro de Punto de Venta: ' . $msgFormatted);
+                session()->flash('error', 'Error en registro de Punto de Venta: '.$msgFormatted);
                 $this->dispatch('swal-alert', icon: 'error', title: 'Error SIAT', message: $msgFormatted);
             }
         } catch (\Exception $e) {
-            $msgException = 'Excepción al registrar el Punto de Venta: ' . $e->getMessage();
+            $msgException = 'Excepción al registrar el Punto de Venta: '.$e->getMessage();
             session()->flash('error', $msgException);
             $this->dispatch('swal-alert', icon: 'error', title: 'Excepción SIAT', message: $msgException);
         }
@@ -782,9 +847,9 @@ class Sucursales extends Component
         $sucursales = Sucursal::query()
             ->when($this->search !== '', function ($query) {
                 $query->where(function ($q) {
-                    $q->where('nombre', 'like', '%' . trim($this->search) . '%')
-                        ->orWhere('codigo_sucursal', 'like', '%' . trim($this->search) . '%')
-                        ->orWhere('direccion', 'like', '%' . trim($this->search) . '%');
+                    $q->where('nombre', 'like', '%'.trim($this->search).'%')
+                        ->orWhere('codigo_sucursal', 'like', '%'.trim($this->search).'%')
+                        ->orWhere('direccion', 'like', '%'.trim($this->search).'%');
                 });
             })
             ->orderBy('id', 'desc')

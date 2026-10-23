@@ -226,8 +226,147 @@ class HistorialVentas extends Component
             $this->dispatch('swal-alert', icon: 'success', title: 'Factura Anulada', message: $msg);
         } catch (Exception $e) {
             DB::rollBack();
-            Log::error('Error al anular factura: ' . $e->getMessage());
+            Log::error('Error al anular factura: '.$e->getMessage());
             $this->dispatch('swal-alert', icon: 'error', title: 'Error en Anulación', message: $e->getMessage());
+        }
+    }
+
+    /**
+     * Solicita confirmación para revertir la anulación de una factura.
+     */
+    public function confirmarReversion(int $facturaId): void
+    {
+        abort_if(! Auth::user()?->tienePermiso('ventas.facturas.anular') && ! Auth::user()?->tienePermiso('ventas.facturas.revertir_anulacion'), 403, 'No tiene permiso para revertir anulaciones de facturas.');
+
+        $factura = Factura::findOrFail($facturaId);
+        $this->dispatch('swal:confirm', [
+            'title' => '¿Revertir Anulación?',
+            'text' => "Se enviará la reversión de anulación de la Factura N° {$factura->numero_factura} ante el SIAT y se restaurará el estado de la venta. ¿Desea continuar?",
+            'icon' => 'warning',
+            'confirmButtonText' => 'Sí, Revertir Anulación',
+            'cancelButtonText' => 'Cancelar',
+            'method' => 'revertirAnulacion',
+            'params' => [$facturaId],
+            'componentId' => $this->getId(),
+        ]);
+    }
+
+    /**
+     * Procesa la reversión de la anulación ante el SIAT y restaura el stock y estado de la factura.
+     */
+    public function revertirAnulacion(int $facturaId, SiatFacturacionService $siatService): void
+    {
+        abort_if(! Auth::user()?->tienePermiso('ventas.facturas.anular') && ! Auth::user()?->tienePermiso('ventas.facturas.revertir_anulacion'), 403, 'No tiene permiso para revertir anulaciones de facturas.');
+
+        $factura = Factura::with(['detalles.lote', 'caja', 'pagos'])->findOrFail($facturaId);
+
+        if ($factura->estado !== 'ANULADA') {
+            $this->dispatch('swal-alert', icon: 'warning', title: 'Operación Inválida', message: 'Solo se puede revertir la anulación de facturas en estado ANULADA.');
+
+            return;
+        }
+
+        // 1. Invocar reversión de anulación ante el WebService del SIAT
+        $resSiat = $siatService->revertirAnulacionFacturaSiat($factura);
+        if (! $resSiat['success']) {
+            $this->dispatch('swal-alert', icon: 'error', title: 'Rechazo SIAT', message: $resSiat['mensaje']);
+
+            return;
+        }
+
+        // 2. Transacción de Base de Datos: Descontar stock nuevamente y asentar Kardex
+        DB::beginTransaction();
+        try {
+            $fechaReversion = now();
+
+            // Verificar si hay stock disponible en los lotes antes de descontar
+            foreach ($factura->detalles as $det) {
+                if ($det->lote_id) {
+                    $lote = Lote::where('id', $det->lote_id)->lockForUpdate()->first();
+                    if (! $lote || (float) $lote->stock_actual < (float) $det->cantidad) {
+                        DB::rollBack();
+                        $this->dispatch('swal-alert', icon: 'error', title: 'Stock Insuficiente', message: "No se puede revertir la anulación: el lote {$det->numero_lote} no cuenta con stock suficiente ({$det->cantidad} requeridas).");
+
+                        return;
+                    }
+                }
+            }
+
+            // Descontar stock y registrar salida en Kardex
+            foreach ($factura->detalles as $det) {
+                if ($det->lote_id) {
+                    $lote = Lote::where('id', $det->lote_id)->lockForUpdate()->first();
+                    if ($lote) {
+                        $cantADescontar = (float) $det->cantidad;
+                        $nuevoStock = max(0, (float) $lote->stock_actual - $cantADescontar);
+                        $lote->stock_actual = $nuevoStock;
+                        if ($nuevoStock == 0) {
+                            $lote->estado = 'AGOTADO';
+                        }
+                        $lote->usuario_modificador_id = Auth::id();
+                        $lote->save();
+
+                        // Asentar movimiento de salida en Kardex
+                        Movimiento::create([
+                            'producto_id' => $det->producto_id,
+                            'sucursal_id' => $factura->sucursal_id,
+                            'lote_id' => $lote->id,
+                            'tipo_movimiento' => 'VENTA',
+                            'ingreso' => 0,
+                            'salida' => $cantADescontar,
+                            'saldo_stock' => $nuevoStock,
+                            'numero_lote' => $lote->numero_lote,
+                            'fecha_caducidad' => $lote->fecha_vencimiento,
+                            'fecha' => $fechaReversion,
+                            'descripcion' => "Salida por reversión de anulación de Factura N° {$factura->numero_factura}",
+                            'precio_compra' => (float) $lote->precio_compra,
+                            'precio_venta' => (float) $det->precio,
+                            'estado' => 'ACTIVO',
+                            'usuario_creador_id' => Auth::id(),
+                        ]);
+                    }
+                }
+            }
+
+            // Actualizar factura
+            $factura->estado = 'VALIDADA';
+            $factura->fecha_anulacion = null;
+            $factura->motivo_anulacion_id = null;
+            $factura->motivo_anulacion_descripcion = null;
+            $factura->usuario_modificador_id = Auth::id();
+            $factura->save();
+
+            // Ajustar la caja asociada si sigue abierta
+            if ($factura->caja_id) {
+                $caja = Caja::find($factura->caja_id);
+                if ($caja && in_array($caja->estado, ['ABIERTA', 'Abierta'])) {
+                    $totalFactura = (float) $factura->total;
+                    $caja->total_venta = (float) $caja->total_venta + $totalFactura;
+
+                    foreach ($factura->pagos as $p) {
+                        $montoPagoNeto = (float) $p->monto - (float) ($p->cambio ?? 0);
+                        if ($p->tipo_pago === 'EFECTIVO') {
+                            $caja->venta_contado = (float) $caja->venta_contado + $montoPagoNeto;
+                        } elseif ($p->tipo_pago === 'QR') {
+                            $caja->total_qr = (float) $caja->total_qr + $montoPagoNeto;
+                        } elseif ($p->tipo_pago === 'TRANSFERENCIA') {
+                            $caja->total_transferencia = (float) $caja->total_transferencia + $montoPagoNeto;
+                        }
+                    }
+                    $caja->saldo = (float) $caja->monto_apertura + (float) $caja->venta_contado + (float) $caja->otro_ingreso - (float) $caja->total_salida;
+                    $caja->save();
+                }
+            }
+
+            DB::commit();
+
+            $msg = "Anulación revertida exitosamente. Factura N° {$factura->numero_factura} vuelve a estar VALIDADA en el SIAT.";
+            session()->flash('message', $msg);
+            $this->dispatch('swal-alert', icon: 'success', title: '¡Anulación Revertida!', message: $msg);
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error('Error al revertir anulación de factura: '.$e->getMessage());
+            $this->dispatch('swal-alert', icon: 'error', title: 'Error en Reversión', message: $e->getMessage());
         }
     }
 
@@ -251,7 +390,7 @@ class HistorialVentas extends Component
         if ($diferenciaSegundos > 240) {
             $fechaActual = now();
             $factura->fecha = $fechaActual;
-            $fechaCadena = $fechaActual->format('YmdHis') . '000';
+            $fechaCadena = $fechaActual->format('YmdHis').'000';
             $factura->cuf = $siatService->calcularCuf(
                 config('siat.nit'),
                 $fechaCadena,
@@ -278,7 +417,8 @@ class HistorialVentas extends Component
 
             $this->dispatch('swal-alert', icon: 'success', title: 'Envío Exitoso', message: "Factura N° {$factura->numero_factura} validada correctamente ante el SIAT.");
         } else {
-            $factura->codigo_descripcion = $res['mensaje'] ?? 'Error al enviar a SIAT';
+            $factura->codigo_descripcion = mb_substr($res['codigo_descripcion'] ?? ($res['mensaje'] ?? 'OBSERVADA'), 0, 255);
+            $factura->descripcion = $res['mensaje'] ?? null;
             $factura->save();
 
             $this->dispatch('swal-alert', icon: 'error', title: 'Rechazo SIAT', message: $res['mensaje'] ?? 'No se pudo validar la factura.');
@@ -296,10 +436,10 @@ class HistorialVentas extends Component
                         ->orWhere('cuf', 'like', "%{$this->search}%");
                 });
             })
-            ->when($this->filtroSucursalId, fn($q) => $q->where('sucursal_id', $this->filtroSucursalId))
-            ->when($this->filtroEstado, fn($q) => $q->where('estado', $this->filtroEstado))
-            ->when($this->fechaInicio, fn($q) => $q->whereDate('fecha', '>=', $this->fechaInicio))
-            ->when($this->fechaFin, fn($q) => $q->whereDate('fecha', '<=', $this->fechaFin))
+            ->when($this->filtroSucursalId, fn ($q) => $q->where('sucursal_id', $this->filtroSucursalId))
+            ->when($this->filtroEstado, fn ($q) => $q->where('estado', $this->filtroEstado))
+            ->when($this->fechaInicio, fn ($q) => $q->whereDate('fecha', '>=', $this->fechaInicio))
+            ->when($this->fechaFin, fn ($q) => $q->whereDate('fecha', '<=', $this->fechaFin))
             ->orderBy('id', 'desc');
 
         $facturas = $query->paginate($this->perPage);

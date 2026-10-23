@@ -271,6 +271,73 @@ test('can cancel (anular) an invoice from historial, returns stock to physical b
     ]);
 });
 
+test('can revert (desanular) an annulled invoice from historial, discounts stock again and updates kardex', function () {
+    $user = User::factory()->admin()->create();
+    $sucursal = Sucursal::factory()->create();
+    $producto = Producto::factory()->create();
+
+    $lote = Lote::factory()->create([
+        'producto_id' => $producto->id,
+        'sucursal_id' => $sucursal->id,
+        'stock_actual' => 12,
+        'numero_lote' => 'LOT-REVERTIR-01',
+    ]);
+
+    $factura = Factura::create([
+        'usuario_creador_id' => $user->id,
+        'sucursal_id' => $sucursal->id,
+        'cliente_id' => 1,
+        'fecha' => now(),
+        'nit' => '99001',
+        'razon_social' => 'S/N',
+        'numero_factura' => '9992',
+        'total' => 40.00,
+        'monto_total_subjeto_iva' => 40.00,
+        'cuf' => 'DEF456CUFTEST',
+        'estado' => 'ANULADA',
+        'fecha_anulacion' => now(),
+        'motivo_anulacion_id' => 1,
+        'motivo_anulacion_descripcion' => 'Error previo',
+    ]);
+
+    Detalle::create([
+        'usuario_creador_id' => $user->id,
+        'factura_id' => $factura->id,
+        'producto_id' => $producto->id,
+        'lote_id' => $lote->id,
+        'sucursal_id' => $sucursal->id,
+        'nombre_producto' => $producto->nombre,
+        'numero_lote' => $lote->numero_lote,
+        'fecha_vencimiento' => $lote->fecha_vencimiento,
+        'precio' => 20.00,
+        'cantidad' => 2,
+        'total' => 40.00,
+        'importe' => 40.00,
+        'fecha' => now(),
+        'estado' => 'ACTIVO',
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(HistorialVentas::class)
+        ->call('revertirAnulacion', $factura->id)
+        ->assertDispatched('swal-alert', function (string $eventName, array $params) {
+            return $params['icon'] === 'success' && str_contains($params['title'], 'Anulación Revertida');
+        })
+        ->assertHasNoErrors();
+
+    expect($factura->fresh()->estado)->toBe('VALIDADA')
+        ->and($factura->fresh()->motivo_anulacion_id)->toBeNull()
+        ->and((float) $lote->fresh()->stock_actual)->toBe(10.0); // 12 - 2 descontados
+
+    $this->assertDatabaseHas('movimientos', [
+        'producto_id' => $producto->id,
+        'lote_id' => $lote->id,
+        'tipo_movimiento' => 'VENTA',
+        'salida' => 2,
+        'saldo_stock' => 10,
+    ]);
+});
+
 test('unauthorized users cannot access the invoice ticket pdf print route', function () {
     $user = User::factory()->create();
     $factura = Factura::factory()->create();

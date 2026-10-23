@@ -78,145 +78,225 @@
         @livewireScripts
 
         <!-- Scripts globales de ayuda y confirmación (SweetAlert2) -->
-        <script>
-            window.addEventListener('swal', (event) => {
-                const data = Array.isArray(event.detail) ? event.detail[0] : event.detail;
-                if (!data) return;
+        <script data-navigate-once>
+            (function() {
+                if (window.__globalSwalHandlersRegistered) {
+                    return;
+                }
+                window.__globalSwalHandlersRegistered = true;
 
-                if (data.toast !== false) {
-                    const Toast = Swal.mixin({
-                        toast: true,
-                        position: 'top-end',
-                        showConfirmButton: false,
-                        timer: 3000,
-                        timerProgressBar: true,
-                        background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff',
-                        color: document.documentElement.classList.contains('dark') ? '#f8fafc' : '#1e293b',
-                        customClass: {
-                            popup: 'rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl font-sans'
+                function dispararAlertaSwal(rawPayload) {
+                    let data = rawPayload;
+                    if (Array.isArray(data)) {
+                        data = data[0];
+                    }
+                    if (!data) return;
+
+                    if (typeof data === 'string') {
+                        data = { message: data };
+                    }
+
+                    const icon = data.icon || 'info';
+                    const title = data.title || (icon === 'error' ? 'Error' : (icon === 'warning' ? 'Atención' : 'Notificación'));
+                    
+                    let rawMsg = data.message !== undefined ? data.message : (data.text !== undefined ? data.text : (data.mensaje !== undefined ? data.mensaje : (data.msg !== undefined ? data.msg : (data.error !== undefined ? data.error : ''))));
+
+                    let message = '';
+                    if (Array.isArray(rawMsg)) {
+                        message = rawMsg.map(item => {
+                            if (typeof item === 'object' && item !== null) {
+                                return item.descripcion || item.mensaje || JSON.stringify(item);
+                            }
+                            return String(item);
+                        }).join('<br>');
+                    } else if (typeof rawMsg === 'object' && rawMsg !== null) {
+                        message = rawMsg.descripcion || rawMsg.mensaje || rawMsg.msg || rawMsg.error || JSON.stringify(rawMsg);
+                    } else {
+                        message = String(rawMsg || '');
+                    }
+
+                    const trimmed = message.trim();
+                    if (trimmed === '[]' || trimmed === '{}' || trimmed === '' || trimmed === 'null') {
+                        if (icon === 'error') {
+                            message = 'Ocurrió un error en el servidor o comunicación con el SIAT. Por favor revise el Historial de Ventas o los registros del sistema.';
+                        } else if (icon === 'warning') {
+                            message = 'La operación se registró con advertencias del sistema.';
+                        } else {
+                            message = title;
                         }
-                    });
-                    Toast.fire({
-                        icon: data.icon || 'success',
-                        title: data.title || '',
-                        text: data.text || ''
-                    });
-                } else {
+                    } else {
+                        message = message.replace(/\n/g, '<br>');
+                    }
+
+                    const esToast = data.toast === true;
+
+                    const isDark = document.documentElement.classList.contains('dark');
+                    const bgColor = isDark ? '#0f172a' : '#ffffff';
+                    const textColor = isDark ? '#f8fafc' : '#1e293b';
+
+                    if (esToast && icon === 'success') {
+                        const Toast = Swal.mixin({
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: 3500,
+                            timerProgressBar: true,
+                            background: bgColor,
+                            color: textColor,
+                            customClass: {
+                                popup: 'rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl font-sans'
+                            }
+                        });
+                        Toast.fire({
+                            icon: icon,
+                            title: title,
+                            html: message
+                        });
+                    } else {
+                        let confirmColor = '#0d9488';
+                        if (icon === 'error') confirmColor = '#e11d48';
+                        if (icon === 'warning') confirmColor = '#d97706';
+                        if (icon === 'info') confirmColor = '#0284c7';
+
+                        Swal.fire({
+                            icon: icon,
+                            title: title,
+                            html: message,
+                            confirmButtonText: 'Entendido',
+                            confirmButtonColor: confirmColor,
+                            background: bgColor,
+                            color: textColor,
+                            customClass: {
+                                popup: 'rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl font-sans p-6 max-w-lg',
+                                confirmButton: 'px-5 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-white shadow-md transition-all'
+                            }
+                        });
+                    }
+                }
+
+                function resolverDatosEvento(event) {
+                    if (!event) return null;
+                    const payload = event.detail !== undefined ? event.detail : event;
+                    if (Array.isArray(payload)) {
+                        return payload[0];
+                    }
+                    if (payload && typeof payload === 'object' && payload[0] !== undefined) {
+                        return payload[0];
+                    }
+                    return payload;
+                }
+
+                window.addEventListener('swal', (event) => dispararAlertaSwal(resolverDatosEvento(event)));
+                window.addEventListener('swal-alert', (event) => dispararAlertaSwal(resolverDatosEvento(event)));
+
+                document.addEventListener('livewire:init', () => {
+                    if (window.Livewire) {
+                        Livewire.on('swal', (data) => dispararAlertaSwal(resolverDatosEvento(data)));
+                        Livewire.on('swal-alert', (data) => dispararAlertaSwal(resolverDatosEvento(data)));
+                    }
+                });
+
+                window.addEventListener('swal:confirm', (event) => {
+                    const data = Array.isArray(event.detail) ? event.detail[0] : event.detail;
+                    if (!data) return;
+
+                    const safeParams = Array.isArray(data.params) ? data.params : (data.params !== undefined ? [data.params] : []);
+
                     Swal.fire({
-                        icon: data.icon || 'info',
-                        title: data.title || '',
-                        text: data.text || '',
-                        confirmButtonColor: '#0d9488',
+                        title: data.title || '¿Está seguro?',
+                        text: data.text || 'Esta acción no se puede deshacer.',
+                        icon: data.icon || 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#e11d48',
+                        cancelButtonColor: '#64748b',
+                        confirmButtonText: data.confirmButtonText || 'Sí, confirmar',
+                        cancelButtonText: data.cancelButtonText || 'Cancelar',
+                        reverseButtons: true,
                         background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff',
                         color: document.documentElement.classList.contains('dark') ? '#f8fafc' : '#1e293b',
                         customClass: {
                             popup: 'rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl font-sans p-6',
-                            confirmButton: 'px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-white shadow-md shadow-teal-500/20 transition-all'
+                            confirmButton: 'px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-white shadow-md shadow-rose-500/20 ml-2 transition-all',
+                            cancelButton: 'px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-white transition-all'
                         }
-                    });
-                }
-            });
-
-            window.addEventListener('swal:confirm', (event) => {
-                const data = Array.isArray(event.detail) ? event.detail[0] : event.detail;
-                if (!data) return;
-
-                const safeParams = Array.isArray(data.params) ? data.params : (data.params !== undefined ? [data.params] : []);
-
-                Swal.fire({
-                    title: data.title || '¿Está seguro?',
-                    text: data.text || 'Esta acción no se puede deshacer.',
-                    icon: data.icon || 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#e11d48',
-                    cancelButtonColor: '#64748b',
-                    confirmButtonText: data.confirmButtonText || 'Sí, confirmar',
-                    cancelButtonText: data.cancelButtonText || 'Cancelar',
-                    reverseButtons: true,
-                    background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff',
-                    color: document.documentElement.classList.contains('dark') ? '#f8fafc' : '#1e293b',
-                    customClass: {
-                        popup: 'rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl font-sans p-6',
-                        confirmButton: 'px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-white shadow-md shadow-rose-500/20 ml-2 transition-all',
-                        cancelButton: 'px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-white transition-all'
-                    }
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        if (data.componentId && data.method && window.Livewire) {
-                            const component = window.Livewire.find(data.componentId);
-                            if (component) {
-                                component.call(data.method, ...safeParams);
-                                return;
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            if (data.componentId && data.method && window.Livewire) {
+                                const component = window.Livewire.find(data.componentId);
+                                if (component) {
+                                    component.call(data.method, ...safeParams);
+                                    return;
+                                }
+                            }
+                            if (data.event && window.Livewire) {
+                                window.Livewire.dispatch(data.event, safeParams);
                             }
                         }
-                        if (data.event && window.Livewire) {
-                            window.Livewire.dispatch(data.event, safeParams);
+                    });
+                });
+
+                window.showConfirmSwal = function(title, html, onConfirm) {
+                    Swal.fire({
+                        title: title,
+                        html: html,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#e11d48',
+                        cancelButtonColor: '#64748b',
+                        confirmButtonText: 'Sí, continuar y eliminar',
+                        cancelButtonText: 'Cancelar',
+                        reverseButtons: true,
+                        background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff',
+                        color: document.documentElement.classList.contains('dark') ? '#f8fafc' : '#1e293b',
+                        customClass: {
+                            popup: 'rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl font-sans p-6',
+                            confirmButton: 'px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-white shadow-md shadow-rose-500/20 ml-2 transition-all',
+                            cancelButton: 'px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-white transition-all'
                         }
+                    }).then((result) => {
+                        if (result.isConfirmed && typeof onConfirm === 'function') {
+                            onConfirm();
+                        }
+                    });
+                };
+
+                window.showToastSwal = function(title, text, icon = 'success') {
+                    Swal.fire({
+                        title: title,
+                        text: text,
+                        icon: icon,
+                        timer: 2500,
+                        showConfirmButton: false,
+                        background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff',
+                        color: document.documentElement.classList.contains('dark') ? '#f8fafc' : '#1e293b',
+                        customClass: {
+                            popup: 'rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl font-sans'
+                        }
+                    });
+                };
+
+                window.abrirTicketPdf = function(url) {
+                    const width = 440;
+                    const height = 680;
+                    const left = Math.max(0, (window.screen.width - width) / 2);
+                    const top = Math.max(0, (window.screen.height - height) / 2);
+                    const popup = window.open(
+                        url,
+                        'ImpresionTicketFiscal',
+                        `width=${width},height=${height},top=${top},left=${left},status=no,toolbar=no,menubar=no,location=no,resizable=yes,scrollbars=yes`
+                    );
+                    if (popup) {
+                        popup.focus();
+                    }
+                };
+
+                window.addEventListener('abrir-ticket-flotante', function(event) {
+                    const url = event.detail?.url || event.detail?.[0]?.url;
+                    if (url) {
+                        window.abrirTicketPdf(url);
                     }
                 });
-            });
-
-            window.showConfirmSwal = function(title, html, onConfirm) {
-                Swal.fire({
-                    title: title,
-                    html: html,
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#e11d48',
-                    cancelButtonColor: '#64748b',
-                    confirmButtonText: 'Sí, continuar y eliminar',
-                    cancelButtonText: 'Cancelar',
-                    reverseButtons: true,
-                    background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff',
-                    color: document.documentElement.classList.contains('dark') ? '#f8fafc' : '#1e293b',
-                    customClass: {
-                        popup: 'rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl font-sans p-6',
-                        confirmButton: 'px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-white shadow-md shadow-rose-500/20 ml-2 transition-all',
-                        cancelButton: 'px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-white transition-all'
-                    }
-                }).then((result) => {
-                    if (result.isConfirmed && typeof onConfirm === 'function') {
-                        onConfirm();
-                    }
-                });
-            };
-
-            window.showToastSwal = function(title, text, icon = 'success') {
-                Swal.fire({
-                    title: title,
-                    text: text,
-                    icon: icon,
-                    timer: 2500,
-                    showConfirmButton: false,
-                    background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff',
-                    color: document.documentElement.classList.contains('dark') ? '#f8fafc' : '#1e293b',
-                    customClass: {
-                        popup: 'rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl font-sans'
-                    }
-                });
-            };
-
-            window.abrirTicketPdf = function(url) {
-                const width = 440;
-                const height = 680;
-                const left = Math.max(0, (window.screen.width - width) / 2);
-                const top = Math.max(0, (window.screen.height - height) / 2);
-                const popup = window.open(
-                    url,
-                    'ImpresionTicketFiscal',
-                    `width=${width},height=${height},top=${top},left=${left},status=no,toolbar=no,menubar=no,location=no,resizable=yes,scrollbars=yes`
-                );
-                if (popup) {
-                    popup.focus();
-                }
-            };
-
-            window.addEventListener('abrir-ticket-flotante', function(event) {
-                const url = event.detail?.url || event.detail?.[0]?.url;
-                if (url) {
-                    window.abrirTicketPdf(url);
-                }
-            });
+            })();
         </script>
         @stack('scripts')
     </body>

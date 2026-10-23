@@ -555,7 +555,7 @@ class Pos extends Component
 
         if ($totalPagado < round($totalAPagar - 0.009, 2)) {
             $falta = max(0, round($totalAPagar - $totalPagado, 2));
-            $this->dispatch('swal-alert', icon: 'warning', title: 'Pago Insuficiente', message: 'El total pagado no cubre el monto de la compra. Faltan Bs. ' . number_format($falta, 2));
+            $this->dispatch('swal-alert', icon: 'warning', title: 'Pago Insuficiente', message: 'El total pagado no cubre el monto de la compra. Faltan Bs. '.number_format($falta, 2));
 
             return;
         }
@@ -578,7 +578,7 @@ class Pos extends Component
         // Obtener Correlativo y Parámetros para CUF
         $numeroFactura = $siatService->obtenerSiguienteNumeroFactura($sucursal->id, $puntoVenta->id);
         $fechaActual = now();
-        $fechaHoraCadena = $fechaActual->format('YmdHis') . '000';
+        $fechaHoraCadena = $fechaActual->format('YmdHis').'000';
         $nitEmisor = config('siat.nit');
         $codigoModalidad = (int) config('siat.codigo_modalidad');
 
@@ -757,7 +757,8 @@ class Pos extends Component
                 $factura->estado = 'VALIDADA';
             } else {
                 $factura->codigo_recepcion = $resSiat['codigo_recepcion'] ?? null;
-                $factura->codigo_descripcion = $resSiat['mensaje'] ?? 'PENDIENTE';
+                $factura->codigo_descripcion = mb_substr($resSiat['codigo_descripcion'] ?? ($resSiat['mensaje'] ?? 'PENDIENTE'), 0, 255);
+                $factura->descripcion = $resSiat['mensaje'] ?? null;
                 $factura->estado = $resSiat['en_contingencia'] ? 'PENDIENTE_ENVIO' : 'OBSERVADA';
             }
             $factura->save();
@@ -771,15 +772,27 @@ class Pos extends Component
 
             $this->dispatch('abrir-ticket-flotante', url: route('ventas.factura.imprimir', $factura->id));
 
-            $msg = $factura->estado === 'VALIDADA'
-                ? "¡Factura N° {$numeroFactura} emitida y validada exitosamente ante el SIAT!"
-                : "¡Venta completada! Factura registrada en contingencia ({$factura->estado}).";
+            if ($factura->estado === 'VALIDADA') {
+                $icon = 'success';
+                $title = '¡Venta y Factura Validada!';
+                $msg = "¡Factura N° {$numeroFactura} emitida y validada exitosamente ante el SIAT!";
+            } elseif ($factura->estado === 'OBSERVADA') {
+                $icon = 'warning';
+                $title = 'Venta Registrada con Observación';
+                $motivo = ! empty($resSiat['mensaje']) && $resSiat['mensaje'] !== '[]' ? $resSiat['mensaje'] : 'Revisar observaciones en Historial de Ventas';
+                $msg = "La venta fue registrada localmente, pero el SIAT reportó observaciones:\n{$motivo}";
+            } else {
+                $icon = 'success';
+                $title = '¡Venta en Contingencia Realizada!';
+                $motivo = ! empty($resSiat['mensaje']) && $resSiat['mensaje'] !== '[]' ? "\n\nRespuesta del SIAT:\n{$resSiat['mensaje']}" : '';
+                $msg = "¡Venta completada con éxito!\nFactura registrada fuera de línea ({$factura->estado}).{$motivo}\n\nSerá regularizada automáticamente mediante el paquete de contingencia.";
+            }
 
-            $this->dispatch('swal-alert', icon: 'success', title: '¡Venta Realizada!', message: $msg);
-        } catch (Exception $e) {
+            $this->dispatch('swal-alert', icon: $icon, title: $title, message: $msg);
+        } catch (\Throwable $e) {
             DB::rollBack();
-            Log::error('Error al procesar venta POS: ' . $e->getMessage());
-            $this->dispatch('swal-alert', icon: 'error', title: 'Error al Facturar', message: $e->getMessage());
+            Log::error('Error al procesar venta POS: '.$e->getMessage());
+            $this->dispatch('swal-alert', icon: 'error', title: 'Error al Facturar', message: 'No se pudo completar la venta: '.$e->getMessage());
         }
     }
 
