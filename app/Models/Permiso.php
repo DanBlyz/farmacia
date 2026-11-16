@@ -29,32 +29,47 @@ class Permiso extends Model
     }
 
     /**
-     * Módulo al que pertenece el permiso según su ID y prefijo.
+     * Módulo al que pertenece el permiso según su slug 'modulo.apartado.accion'.
      */
     public function getModuloAttribute(): string
     {
-        $id = (int) $this->id;
+        $partes = explode('.', (string) $this->nombre);
+        $slug = $partes[0] ?? '';
 
-        if (in_array($id, [1, 2, 3, 4], true) || ($id >= 11 && $id <= 21)) {
-            return 'Administración y Sistema';
-        }
+        return match ($slug) {
+            'administracion' => 'Administración y Personal',
+            'sincronizacion' => 'Sincronización SIAT',
+            'inventario' => 'Inventario Farmacéutico',
+            'cajas' => 'Control de Cajas',
+            'ventas' => 'Ventas y Facturación',
+            default => ucfirst($slug ?: 'General'),
+        };
+    }
 
-        if ($id === 5 || ($id >= 22 && $id <= 26)) {
-            return 'Pacientes e Instituciones';
-        }
+    /**
+     * Apartado o sección del módulo al que pertenece el permiso.
+     */
+    public function getApartadoAttribute(): string
+    {
+        $partes = explode('.', (string) $this->nombre);
+        $slug = $partes[1] ?? '';
 
-        if (in_array($id, [6, 7, 8], true) || ($id >= 27 && $id <= 46)) {
-            return 'Proformas Clínicas y Admisión';
-        }
-
-        if ($id === 9 || ($id >= 47 && $id <= 59)) {
-            return 'Farmacia e Inventario';
-        }
-
-        if ($id === 10 || ($id >= 60 && $id <= 70)) {
-            return 'Caja y Finanzas';
-        }
-
-        return 'General';
+        return match ($slug) {
+            'sucursales' => 'Sucursales',
+            'usuarios' => 'Usuarios',
+            'roles' => 'Roles',
+            'clientes' => 'Clientes',
+            'proveedores' => 'Proveedores y Laboratorios',
+            'catalogos' => 'Catálogos SIN',
+            'eventos' => 'Eventos Significativos',
+            'paquetes' => 'Paquetes de Contingencia',
+            'productos' => 'Medicamentos y Productos',
+            'lotes' => 'Lotes y Vencimientos (FEFO)',
+            'kardex' => 'Kardex de Movimientos',
+            'control' => 'Control de Cajas y Turnos',
+            'pos' => 'Terminal POS y Dispensación',
+            'facturas' => 'Facturación e Historial',
+            default => ucfirst($slug ?: 'General'),
+        };
     }
 }

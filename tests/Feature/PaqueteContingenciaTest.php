@@ -205,3 +205,41 @@ test('service automatically generates xml with construirXmlFacturaCompraVenta wh
         ->and($resultado['cantidad'])->toBe(1)
         ->and($resultado['bytes'])->not->toBeEmpty();
 });
+
+test('service constructs package where each invoice has unique numero_factura and unique cuf without duplication', function () {
+    $user = User::factory()->admin()->create();
+    $service = app(SiatFacturacionService::class);
+
+    $facturas = [];
+    $cufsGenerados = [];
+    for ($i = 1; $i <= 5; $i++) {
+        $cuf = 'CUF_UNIQUE_'.$i.'_'.uniqid();
+        $cufsGenerados[] = $cuf;
+        $facturas[] = Factura::create([
+            'punto_venta_id' => $this->pv->id,
+            'sucursal_id' => $this->sucursal->id,
+            'cufd_id' => $this->cufd->id,
+            'caja_id' => 1,
+            'cliente_id' => 1,
+            'usuario_creador_id' => $user->id,
+            'numero_factura' => (string) (7000 + $i),
+            'nit' => '1234567',
+            'razon_social' => 'CLIENTE UNICO '.$i,
+            'fecha' => now()->format('Y-m-d H:i:s'),
+            'total' => 100.00,
+            'monto_total_subjeto_iva' => 100.00,
+            'cuf' => $cuf,
+            'estado' => 'PENDIENTE_ENVIO',
+            'productos_xml' => '<?xml version="1.0"?><factura><numeroFactura>'.(7000 + $i)."</numeroFactura><cuf>{$cuf}</cuf></factura>",
+        ]);
+    }
+
+    $resultado = $service->construirPaqueteTarGz($facturas);
+
+    expect($resultado['error'])->toBeNull()
+        ->and($resultado['cantidad'])->toBe(5)
+        ->and($resultado['bytes'])->not->toBeEmpty();
+
+    // Verify all 5 CUFs are completely unique
+    expect(count(array_unique($cufsGenerados)))->toBe(5);
+});

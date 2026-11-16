@@ -580,6 +580,7 @@ class Sucursales extends Component
         $sucursal = Sucursal::findOrFail($targetSucursalId);
 
         $puntoVenta0 = PuntoVenta::where('sucursal_id', $sucursal->id)->orderBy('codigo', 'asc')->first();
+        // $puntoVenta0 = PuntoVenta::find(2);
         if (! $puntoVenta0) {
             $msg = 'No existe ningún punto de venta en esta sucursal para autorizar el cierre de operaciones.';
             session()->flash('error', $msg);

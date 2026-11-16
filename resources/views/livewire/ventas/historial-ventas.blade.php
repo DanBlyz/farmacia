@@ -101,9 +101,9 @@
                     <select wire:model.live="perPage" 
                             class="py-1.5 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
                         <option value="10">10</option>
-                        <option value="15">15</option>
                         <option value="25">25</option>
                         <option value="50">50</option>
+                        <option value="100">100</option>
                     </select>
                 </div>
 
@@ -234,7 +234,7 @@
                                         @endpermiso
 
                                         <!-- Reintentar Envío a SIAT (si quedó en contingencia / pendiente) -->
-                                        @if($factura->estado === 'PENDIENTE_ENVIO')
+                                        @if($factura->estado === 'PENDIENTE_ENVIO' || $factura->estado === 'OBSERVADA')
                                             <button wire:click="reintentarEnvioSiat({{ $factura->id }})" 
                                                     wire:loading.attr="disabled"
                                                     class="p-1.5 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors"

@@ -46,12 +46,16 @@ class PrepararContingenciasCommand extends Command
 
         // 1. Limpieza inicial de las tablas
         $this->comment('Paso 1: Limpiando tablas de eventos y paquetes en base de datos...');
+        $baseFacturaXml = Factura::where('productos_xml', 'like', '%<?xml%')->where('id', '<', 10)->latest('id')->value('productos_xml')
+            ?: Factura::where('productos_xml', 'like', '%<?xml%')->latest('id')->value('productos_xml');
+
         Schema::disableForeignKeyConstraints();
+        Factura::where('razon_social', 'like', '%CLIENTE CONTINGENCIA ETAPA VI%')->delete();
         Factura::query()->update(['paquete_id' => null, 'evento_significativo_id' => null]);
         PaqueteFactura::truncate();
         EventoSignificativo::truncate();
         Schema::enableForeignKeyConstraints();
-        $this->line('  ✔ Tablas evento_significativos y paquete_facturas vaciadas.');
+        $this->line('  ✔ Tablas evento_significativos, paquete_facturas y facturas de prueba vaciadas.');
 
         // 2. Obtener referencias
         $pv1 = PuntoVenta::where('codigo', 1)->first();
@@ -84,8 +88,11 @@ class PrepararContingenciasCommand extends Command
         }
 
         // Base de tiempo basada en el inicio del CUFD activo para evitar error 984
-        $inicioCufd1 = Carbon::parse($cufd1->fecha_vigencia, 'America/La_Paz')->subDay()->addSeconds(30);
-        $inicioCufd0 = Carbon::parse($cufd0->fecha_vigencia, 'America/La_Paz')->subDay()->addSeconds(30);
+        // Usamos un offset dinámico para garantizar intervalos de contingencia válidos y no colisionar con ejecuciones previas
+        $tiempoTranscurridoMin = max(0, (int) Carbon::parse($cufd1->fecha_vigencia, 'America/La_Paz')->subDay()->diffInMinutes(now('America/La_Paz')));
+        $offsetBaseMin = ($tiempoTranscurridoMin > 35) ? ($tiempoTranscurridoMin - 32) : 1;
+        $inicioCufd1 = Carbon::parse($cufd1->fecha_vigencia, 'America/La_Paz')->subDay()->addSeconds(30)->addMinutes($offsetBaseMin);
+        $inicioCufd0 = Carbon::parse($cufd0->fecha_vigencia, 'America/La_Paz')->subDay()->addSeconds(30)->addMinutes($offsetBaseMin);
 
         // Matriz de los 14 casos (7 motivos para PV 1 y 7 motivos para PV 0)
         $casos = [
@@ -113,9 +120,10 @@ class PrepararContingenciasCommand extends Command
 
         $this->newLine();
         $this->comment('Paso 2: Generando el flujo completo para los 14 casos de contingencia...');
-        $baseFacturaXml = Factura::where('productos_xml', 'like', '%<?xml%')->where('id', '<', 10)->latest('id')->value('productos_xml');
 
-        $numeroFacturaBase = 300;
+        $maxFacturaNum = (int) Factura::max('numero_factura');
+        // Base segura y fresca para evitar colisiones con facturas históricas enviadas al SIN
+        $baseGlobal = max($maxFacturaNum, 2000) + 100;
 
         foreach ($casos as $casoNum => $caso) {
             $pvModel = $caso['pv'];
@@ -129,11 +137,9 @@ class PrepararContingenciasCommand extends Command
 
             $tipoEventoModel = TipoEventoSignificativo::where('codigo_clasificador', $codMotivo)->first();
 
-            // Intervalo del evento (1 minuto exacto, no solapado)
+            // Intervalo del evento (50 segundos exactos, no solapado)
             $fechaIni = $inicioBase->format('Y-m-d\TH:i:s.000');
             $fechaFin = $inicioBase->copy()->addSeconds(50)->format('Y-m-d\TH:i:s.000');
-            $fechaEmision = $inicioBase->copy()->addSeconds(20)->format('Y-m-d\TH:i:s.000');
-            $fechaCadena = $inicioBase->copy()->addSeconds(20)->format('YmdHis').'000';
 
             // A) Registrar Evento Significativo ante el SIAT
             $resEvento = $siatService->registrarEventoSignificativo(
@@ -156,82 +162,107 @@ class PrepararContingenciasCommand extends Command
                 continue;
             }
 
-            // B) Crear Factura en Contingencia en la BD
-            $numeroFactura = $numeroFacturaBase + $casoNum;
-            $cuf = $siatService->calcularCuf(
-                config('siat.nit'),
-                $fechaCadena,
-                (int) $pvModel->sucursal->codigo_sucursal,
-                (int) config('siat.codigo_modalidad'),
-                2, // fuera de linea (contingencia)
-                1, // factura con derecho a credito fiscal
-                1, // documento sector compra venta
-                $numeroFactura,
-                (int) $pvModel->codigo,
-                $cufdModel->codigo_control
-            );
-
-            // Preparar XML de la factura
-            $xml = preg_replace('/<codigoPuntoVenta>.*?<\/codigoPuntoVenta>/', "<codigoPuntoVenta>{$pvModel->codigo}</codigoPuntoVenta>", $baseFacturaXml);
-            $xml = preg_replace('/<numeroFactura>.*?<\/numeroFactura>/', "<numeroFactura>{$numeroFactura}</numeroFactura>", $xml);
-            $xml = preg_replace('/<fechaEmision>.*?<\/fechaEmision>/', "<fechaEmision>{$fechaEmision}</fechaEmision>", $xml);
-            $xml = preg_replace('/<cufd>.*?<\/cufd>/', "<cufd>{$cufdModel->codigo}</cufd>", $xml);
-            $xml = preg_replace('/<cuf>.*?<\/cuf>/', "<cuf>{$cuf}</cuf>", $xml);
-            if (! str_contains($xml, '<descuentoAdicional>')) {
-                $xml = str_replace('<montoGiftCard xsi:nil="true"/>', "<montoGiftCard xsi:nil=\"true\"/>\n        <descuentoAdicional>0.00</descuentoAdicional>", $xml);
+            // B) Preparar plantilla XML para este caso (reemplazando datos fijos de PV, CUFD y CAFC)
+            $plantillaCaso = preg_replace('/<codigoPuntoVenta>.*?<\/codigoPuntoVenta>/', "<codigoPuntoVenta>{$pvModel->codigo}</codigoPuntoVenta>", $baseFacturaXml);
+            $plantillaCaso = preg_replace('/<cufd>.*?<\/cufd>/', "<cufd>{$cufdModel->codigo}</cufd>", $plantillaCaso);
+            if (! str_contains($plantillaCaso, '<descuentoAdicional>')) {
+                $plantillaCaso = str_replace('<montoGiftCard xsi:nil="true"/>', "<montoGiftCard xsi:nil=\"true\"/>\n        <descuentoAdicional>0.00</descuentoAdicional>", $plantillaCaso);
             }
 
             if ($requiereCafc && ! empty($cafcValor)) {
-                if (str_contains($xml, '<cafc xsi:nil="true"/>')) {
-                    $xml = str_replace('<cafc xsi:nil="true"/>', "<cafc>{$cafcValor}</cafc>", $xml);
-                } elseif (preg_match('/<cafc>.*?<\/cafc>/', $xml)) {
-                    $xml = preg_replace('/<cafc>.*?<\/cafc>/', "<cafc>{$cafcValor}</cafc>", $xml);
+                if (str_contains($plantillaCaso, '<cafc xsi:nil="true"/>')) {
+                    $plantillaCaso = str_replace('<cafc xsi:nil="true"/>', "<cafc>{$cafcValor}</cafc>", $plantillaCaso);
+                } elseif (preg_match('/<cafc>.*?<\/cafc>/', $plantillaCaso)) {
+                    $plantillaCaso = preg_replace('/<cafc>.*?<\/cafc>/', "<cafc>{$cafcValor}</cafc>", $plantillaCaso);
+                } else {
+                    $plantillaCaso = str_replace('</cabecera>', "        <cafc>{$cafcValor}</cafc>\n    </cabecera>", $plantillaCaso);
                 }
             } else {
-                $xml = preg_replace('/<cafc>.*?<\/cafc>/', '<cafc xsi:nil="true"/>', $xml);
+                $plantillaCaso = preg_replace('/<cafc>.*?<\/cafc>/', '<cafc xsi:nil="true"/>', $plantillaCaso);
             }
 
-            $factura = Factura::create([
-                'sucursal_id' => $pvModel->sucursal_id,
-                'punto_venta_id' => $pvModel->id,
-                'cufd_id' => $cufdModel->id,
-                'cliente_id' => $cliente?->id ?: 1,
-                'usuario_creador_id' => 1,
-                'evento_significativo_id' => $eventoDb->id,
-                'fecha' => Carbon::parse($fechaEmision),
-                'nit' => $cliente?->nit ?: '99001',
-                'razon_social' => $cliente?->razon_social ?: 'CLIENTE CONTINGENCIA ETAPA VI',
-                'numero_factura' => (string) $numeroFactura,
-                'codigo_metodo_pago' => 1,
-                'total' => 25.00,
-                'monto_total_subjeto_iva' => 25.00,
-                'tipo_factura' => 1,
-                'cuf' => $cuf,
-                'estado' => 'PENDIENTE_ENVIO',
-                'productos_xml' => $xml,
-            ]);
+            // Marcadores para personalización individual por cada factura en el lote
+            $plantillaCaso = preg_replace('/<numeroFactura>.*?<\/numeroFactura>/', '<numeroFactura>__NUMERO_FACTURA__</numeroFactura>', $plantillaCaso);
+            $plantillaCaso = preg_replace('/<fechaEmision>.*?<\/fechaEmision>/', '<fechaEmision>__FECHA_EMISION__</fechaEmision>', $plantillaCaso);
+            $plantillaCaso = preg_replace('/<cuf>.*?<\/cuf>/', '<cuf>__CUF__</cuf>', $plantillaCaso);
+
+            $numeroFacturaCasoBase = $baseGlobal + ($casoNum * 1000);
+            $archivosPaquete = [];
+            $facturasBatch = [];
+
+            for ($f = 1; $f <= $cantFacturas; $f++) {
+                if ($requiereCafc) {
+                    // El CAFC del SIN tiene rango autorizado estricto del 1 al 1000
+                    $numFacturaF = ($cantFacturas === 1) ? (500 + $casoNum) : $f;
+                } else {
+                    // Casos sin CAFC: correlativo dinámico alto para evitar colisión de CUF
+                    $numFacturaF = $numeroFacturaCasoBase + $f;
+                }
+
+                if ($cantFacturas === 1) {
+                    $fechaFacturaF = $inicioBase->copy()->addSeconds(20);
+                } else {
+                    $offsetMs = 2000 + (int) (($f - 1) * (46000 / max($cantFacturas, 1)));
+                    $fechaFacturaF = $inicioBase->copy()->addMilliseconds($offsetMs);
+                }
+
+                $fechaEmisionF = $fechaFacturaF->format('Y-m-d\TH:i:s.v');
+                $fechaCadenaF = $fechaFacturaF->format('YmdHisv');
+
+                $cufF = $siatService->calcularCuf(
+                    config('siat.nit'),
+                    $fechaCadenaF,
+                    (int) $pvModel->sucursal->codigo_sucursal,
+                    (int) config('siat.codigo_modalidad'),
+                    2, // fuera de línea (contingencia)
+                    1, // factura con derecho a crédito fiscal
+                    1, // documento sector compra venta
+                    $numFacturaF,
+                    (int) $pvModel->codigo,
+                    $cufdModel->codigo_control
+                );
+
+                $xmlF = str_replace(
+                    ['__NUMERO_FACTURA__', '__FECHA_EMISION__', '__CUF__'],
+                    [(string) $numFacturaF, $fechaEmisionF, $cufF],
+                    $plantillaCaso
+                );
+
+                $archivosPaquete["factura_{$f}.xml"] = $xmlF;
+
+                $facturasBatch[] = [
+                    'sucursal_id' => $pvModel->sucursal_id,
+                    'punto_venta_id' => $pvModel->id,
+                    'cufd_id' => $cufdModel->id,
+                    'cliente_id' => $cliente?->id ?: 1,
+                    'usuario_creador_id' => 1,
+                    'evento_significativo_id' => $eventoDb->id,
+                    'fecha' => $fechaFacturaF->format('Y-m-d H:i:s'),
+                    'nit' => $cliente?->nit ?: '99001',
+                    'razon_social' => 'CLIENTE CONTINGENCIA ETAPA VI',
+                    'numero_factura' => (string) $numFacturaF,
+                    'codigo_metodo_pago' => 1,
+                    'total' => 25.00,
+                    'monto_total_subjeto_iva' => 25.00,
+                    'tipo_factura' => 1,
+                    'cuf' => $cufF,
+                    'estado' => 'PENDIENTE_ENVIO',
+                    'productos_xml' => $xmlF,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+
+            // Insertar facturas en BD en lotes de 100
+            foreach (array_chunk($facturasBatch, 100) as $chunk) {
+                Factura::insert($chunk);
+            }
 
             // C) Formar el paquete comprimido (.tar.gz)
-            $tempDir = storage_path('app/temp_paquetes/caso_'.$casoNum.'_'.uniqid());
-            mkdir($tempDir, 0777, true);
-            $tarPath = $tempDir.'/paquete.tar';
-            $gzPath = $tarPath.'.gz';
-
-            $phar = new \PharData($tarPath);
-            for ($f = 1; $f <= $cantFacturas; $f++) {
-                $phar->addFromString("factura_{$f}.xml", $xml);
-            }
-            $phar->compress(\Phar::GZ);
-            unset($phar);
-
-            $gzBytes = file_get_contents($gzPath);
+            $gzBytes = SiatFacturacionService::generarTarGz($archivosPaquete);
             $hashArchivo = hash('sha256', $gzBytes);
             $nombreArchivoFinal = "paquete_caso{$casoNum}_pv{$pvModel->codigo}_motivo{$codMotivo}.tar.gz";
             file_put_contents($paquetesDir.'/'.$nombreArchivoFinal, $gzBytes);
-
-            @unlink($tarPath);
-            @unlink($gzPath);
-            @rmdir($tempDir);
 
             $fechaEnvioIso = now('America/La_Paz')->format('Y-m-d\TH:i:s.000');
 
@@ -296,11 +327,13 @@ class PrepararContingenciasCommand extends Command
                     'fecha_envio' => now(),
                 ]);
 
-                // Vincular Factura con el paquete creado
-                $factura->update([
-                    'paquete_id' => $paqueteModel->id,
-                    'estado' => 'PENDIENTE',
-                ]);
+                // Vincular todas las facturas del evento con el paquete creado
+                Factura::where('evento_significativo_id', $eventoDb->id)
+                    ->whereNull('paquete_id')
+                    ->update([
+                        'paquete_id' => $paqueteModel->id,
+                        'estado' => 'PENDIENTE',
+                    ]);
             }
 
             $this->line(sprintf(

@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Administracion;
 
+use App\Models\Permiso;
 use App\Models\PuntoVenta;
 use App\Models\Rol;
 use App\Models\Sucursal;
@@ -55,6 +56,22 @@ class Usuarios extends Component
     public string $newPassword = '';
 
     public string $resetUsuarioNombre = '';
+
+    // Estado del Modal de Asignación de Permisos
+    public bool $showPermissionsModal = false;
+
+    public ?int $permisosUsuarioId = null;
+
+    public string $permisosUsuarioNombre = '';
+
+    public string $permisosUsuarioRol = '';
+
+    public bool $permisosUsuarioEsAdmin = false;
+
+    /** @var array<int> */
+    public array $selectedPermisos = [];
+
+    public string $permisosSearch = '';
 
     public function updatedSearch(): void
     {
@@ -135,7 +152,7 @@ class Usuarios extends Component
                 'codigo' => 0,
                 'nombre' => 'PRIMER PUNTO VENTA POR DEFECTO ('.$sucursal->nombre.')',
                 'tipo' => 'VENTANILLA INICIAL POR DEFECTO',
-                'codigo_ambiente' => 2,
+                'codigo_ambiente' => config('siat.codigo_ambiente'),
             ]);
         }
 
@@ -224,8 +241,16 @@ class Usuarios extends Component
     private function resetForm(): void
     {
         $this->reset([
-            'usuarioId', 'email', 'nombres', 'ap_paterno', 'ap_materno',
-            'rol_id', 'sucursal_id', 'cedula', 'direccion', 'celular',
+            'usuarioId',
+            'email',
+            'nombres',
+            'ap_paterno',
+            'ap_materno',
+            'rol_id',
+            'sucursal_id',
+            'cedula',
+            'direccion',
+            'celular',
         ]);
         $this->resetErrorBag();
     }
@@ -275,6 +300,93 @@ class Usuarios extends Component
         $this->resetErrorBag();
     }
 
+    public function openPermissionsModal(int $id): void
+    {
+        abort_if(
+            ! Auth::user()->tienePermiso('administracion.usuarios.permisos') && ! Auth::user()->tienePermiso('administracion.usuarios.editar'),
+            403,
+            'No tiene permiso para gestionar permisos de usuarios.'
+        );
+
+        $usuario = User::with(['rol', 'permisos'])->findOrFail($id);
+        $this->permisosUsuarioId = $usuario->id;
+        $this->permisosUsuarioNombre = trim($usuario->nombres.' '.$usuario->ap_paterno.' '.$usuario->ap_materno) ?: $usuario->name;
+        $this->permisosUsuarioRol = $usuario->rol?->nombre ?? 'Sin Rol';
+        $this->permisosUsuarioEsAdmin = $usuario->esAdmin();
+        $this->selectedPermisos = $usuario->permisos->pluck('id')->map(fn ($permId) => (int) $permId)->toArray();
+        $this->permisosSearch = '';
+        $this->resetErrorBag();
+        $this->showPermissionsModal = true;
+    }
+
+    public function closePermissionsModal(): void
+    {
+        $this->showPermissionsModal = false;
+        $this->reset([
+            'permisosUsuarioId',
+            'permisosUsuarioNombre',
+            'permisosUsuarioRol',
+            'permisosUsuarioEsAdmin',
+            'selectedPermisos',
+            'permisosSearch',
+        ]);
+        $this->resetErrorBag();
+    }
+
+    public function savePermissions(): void
+    {
+        abort_if(
+            ! Auth::user()->tienePermiso('administracion.usuarios.permisos') && ! Auth::user()->tienePermiso('administracion.usuarios.editar'),
+            403,
+            'No tiene permiso para asignar permisos a usuarios.'
+        );
+
+        $this->validate([
+            'selectedPermisos' => 'array',
+            'selectedPermisos.*' => 'integer|exists:permisos,id',
+        ]);
+
+        $usuario = User::findOrFail($this->permisosUsuarioId);
+        $usuario->permisos()->sync($this->selectedPermisos);
+
+        $this->dispatch('swal', [
+            'icon' => 'success',
+            'title' => '¡Permisos Actualizados!',
+            'text' => 'Los permisos de acceso para '.$this->permisosUsuarioNombre.' se guardaron exitosamente.',
+        ]);
+
+        $this->closePermissionsModal();
+    }
+
+    public function seleccionarTodosPermisos(): void
+    {
+        $this->selectedPermisos = Permiso::pluck('id')->map(fn ($id) => (int) $id)->toArray();
+    }
+
+    public function desmarcarTodosPermisos(): void
+    {
+        $this->selectedPermisos = [];
+    }
+
+    public function toggleModulo(string $moduloNombre): void
+    {
+        $permisosModulo = Permiso::all()
+            ->filter(fn ($p) => $p->modulo === $moduloNombre)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->toArray();
+
+        $interseccion = array_intersect($permisosModulo, $this->selectedPermisos);
+        $todosSeleccionados = count($interseccion) === count($permisosModulo) && count($permisosModulo) > 0;
+
+        if ($todosSeleccionados) {
+            $this->selectedPermisos = array_values(array_diff($this->selectedPermisos, $permisosModulo));
+        } else {
+            $this->selectedPermisos = array_values(array_unique(array_merge($this->selectedPermisos, $permisosModulo)));
+        }
+    }
+
     public function render(): View
     {
         $usuarios = User::query()
@@ -293,10 +405,24 @@ class Usuarios extends Component
             ->orderBy('id', 'desc')
             ->paginate($this->perPage);
 
+        $permisosQuery = Permiso::query()
+            ->when($this->permisosSearch !== '', function ($q) {
+                $q->where(function ($sub) {
+                    $sub->where('nombre', 'like', '%'.trim($this->permisosSearch).'%')
+                        ->orWhere('descripcion', 'like', '%'.trim($this->permisosSearch).'%');
+                });
+            })
+            ->orderBy('nombre')
+            ->get();
+
+        $permisosAgrupados = $permisosQuery->groupBy(['modulo', 'apartado']);
+
         return view('livewire.administracion.usuarios', [
             'usuarios' => $usuarios,
             'roles' => Rol::orderBy('nombre')->get(),
             'sucursales' => Sucursal::orderBy('nombre')->get(),
+            'permisosAgrupados' => $permisosAgrupados,
+            'totalPermisosSistema' => Permiso::count(),
         ]);
     }
 }

@@ -13,10 +13,13 @@ return new class extends Migration
     {
         Schema::create('paquete_facturas', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('usuario_creador_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('usuario_modificador_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('usuario_eliminador_id')->nullable()->constrained('users')->nullOnDelete();
+
             $table->foreignId('evento_significativo_id')->nullable()->constrained('evento_significativos')->nullOnDelete();
             $table->foreignId('punto_venta_id')->nullable()->constrained('punto_ventas')->nullOnDelete();
             $table->foreignId('cufd_id')->nullable()->constrained('cufds')->nullOnDelete();
-            $table->foreignId('usuario_creador_id')->nullable()->constrained('users')->nullOnDelete();
 
             $table->string('codigo_recepcion')->nullable()->index();
             $table->integer('codigo_estado')->nullable();

@@ -1051,37 +1051,32 @@ class SiatHomologacionService
                 $totalIntentos++;
                 try {
                     if ($tipoOperacion === 'envio') {
-                        // Construir archivo .tar.gz comprimido
-                        $tempDir = storage_path('app/temp_paquetes/'.uniqid('homol_'));
-                        if (! is_dir($tempDir)) {
-                            mkdir($tempDir, 0777, true);
-                        }
-                        $tarPath = $tempDir.'/paquete.tar';
-                        $gzPath = $tarPath.'.gz';
-
-                        $phar = new \PharData($tarPath);
-                        $facturaXml = $this->prepararXmlFacturaHomologacion(
-                            $pv,
-                            $contexto,
-                            $cufd,
-                            $eventoDb,
-                            $requiereCafc,
-                            $cafcAplicable,
-                            1
-                        );
-
+                        // Construir archivo .tar.gz comprimido con XMLs y CUFs únicos por factura
+                        $archivosPaquete = [];
+                        $maxNum = max((int) Factura::max('numero_factura'), 3000) + ($i * 1000);
                         for ($f = 1; $f <= $cantFacturas; $f++) {
-                            $phar->addFromString("factura_{$f}.xml", $facturaXml);
-                        }
-                        $phar->compress(\Phar::GZ);
+                            $fechaCustom = ($eventoDb && $eventoDb->fecha_ini)
+                                ? Carbon::parse($eventoDb->fecha_ini)->addSeconds(2 + (int) (($f - 1) * 45 / max($cantFacturas, 1)))
+                                : now('America/La_Paz')->subSeconds(max(0, $cantFacturas - $f));
 
-                        $gzBytes = file_get_contents($gzPath);
+                            $numFacturaH = $requiereCafc
+                                ? (($cantFacturas === 1) ? (500 + $i) : $f)
+                                : ($maxNum + $f);
+
+                            $archivosPaquete["factura_{$f}.xml"] = $this->prepararXmlFacturaHomologacion(
+                                $pv,
+                                $contexto,
+                                $cufd,
+                                $eventoDb,
+                                $requiereCafc,
+                                $cafcAplicable,
+                                $numFacturaH,
+                                $fechaCustom
+                            );
+                        }
+                        $gzBytes = SiatFacturacionService::generarTarGz($archivosPaquete);
                         $hashArchivo = hash('sha256', $gzBytes);
                         $fechaEnvioIso = now('America/La_Paz')->format('Y-m-d\TH:i:s.000');
-
-                        @unlink($tarPath);
-                        @unlink($gzPath);
-                        @rmdir($tempDir);
 
                         $respRaw = $this->siatController->recepcionPaqueteFactura(
                             $contexto['token'],
@@ -1349,17 +1344,19 @@ class SiatHomologacionService
                     );
 
                     $resp = json_decode($respRaw, true);
-                    $resAnulacion = $resp['resultado']['RespuestaServicioAnulacionFactura'] ?? [];
+                    $resAnulacion = $resp['resultado']['RespuestaServicioFacturacion']
+                        ?? ($resp['resultado']['RespuestaServicioAnulacionFactura'] ?? []);
                     $transaccion = $resAnulacion['transaccion'] ?? false;
                     $codigoEstado = $resAnulacion['codigoEstado'] ?? null;
+                    $codigoDesc = $resAnulacion['codigoDescripcion'] ?? '';
 
-                    if (($resp['estado'] ?? '') === 'success' && ($transaccion === true || $codigoEstado == 905 || ($resAnulacion['codigoDescripcion'] ?? '') === 'ANULADA')) {
+                    if (($resp['estado'] ?? '') === 'success' && ($transaccion === true || $codigoEstado == 905 || str_contains($codigoDesc, 'ANULADA') || str_contains($codigoDesc, 'ANULACION CONFIRMADA'))) {
                         $exitososRegistro++;
                         $totalExitosos++;
                         $factura->update([
                             'estado' => 'ANULADA',
                             'codigo_estado' => 905,
-                            'codigo_descripcion' => 'ANULADA',
+                            'codigo_descripcion' => $codigoDesc ?: 'ANULADA',
                         ]);
                     } else {
                         $fallidosRegistro++;
@@ -1510,22 +1507,24 @@ class SiatHomologacionService
                         $cufd->codigo,
                         $contexto['cuis'],
                         $contexto['nit'],
-                        1, // tipoFacturaDocumento
-                        $factura->cuf
+                        $factura->cuf,
+                        1 // tipoFacturaDocumento
                     );
 
                     $resp = json_decode($respRaw, true);
-                    $resReversion = $resp['resultado']['RespuestaServicioReversionAnulacionFactura'] ?? [];
+                    $resReversion = $resp['resultado']['RespuestaServicioFacturacion']
+                        ?? ($resp['resultado']['RespuestaServicioReversionAnulacionFactura'] ?? []);
                     $transaccion = $resReversion['transaccion'] ?? false;
                     $codigoEstado = $resReversion['codigoEstado'] ?? null;
+                    $codigoDesc = $resReversion['codigoDescripcion'] ?? '';
 
-                    if (($resp['estado'] ?? '') === 'success' && ($transaccion === true || $codigoEstado == 908 || ($resReversion['codigoDescripcion'] ?? '') === 'VALIDADA')) {
+                    if (($resp['estado'] ?? '') === 'success' && ($transaccion === true || $codigoEstado == 907 || $codigoEstado == 908 || str_contains($codigoDesc, 'VALIDADA') || str_contains($codigoDesc, 'CONFIRMADA'))) {
                         $exitososRegistro++;
                         $totalExitosos++;
                         $factura->update([
                             'estado' => 'VALIDADA',
-                            'codigo_estado' => 908,
-                            'codigo_descripcion' => 'VALIDADA',
+                            'codigo_estado' => $codigoEstado ?: 908,
+                            'codigo_descripcion' => $codigoDesc ?: 'VALIDADA',
                         ]);
                     } else {
                         $fallidosRegistro++;
@@ -1655,42 +1654,33 @@ class SiatHomologacionService
     private function generarYEnviarPaqueteRapido(array $contexto, string $urlFacturacion, Cufd $cufd, int $cantFacturas = 1): ?string
     {
         try {
-            $tempDir = storage_path('app/temp_paquetes/'.uniqid('quick_'));
-            if (! is_dir($tempDir)) {
-                mkdir($tempDir, 0777, true);
-            }
-            $tarPath = $tempDir.'/paquete.tar';
-            $gzPath = $tarPath.'.gz';
-
             $eventoDb = EventoSignificativo::where('punto_venta_id', $contexto['puntoVentaId'])
                 ->whereNotNull('codigo_recepcion')
                 ->latest('id')
                 ->first();
             $codigoEvento = $eventoDb ? (int) $eventoDb->codigo_recepcion : 9953953;
 
-            $phar = new \PharData($tarPath);
-            $facturaXml = $this->prepararXmlFacturaHomologacion(
-                $contexto['codigoPuntoVenta'],
-                $contexto,
-                $cufd,
-                $eventoDb,
-                false,
-                null,
-                1
-            );
-
+            $archivosPaquete = [];
+            $maxNum = max((int) Factura::max('numero_factura'), 4000) + 500;
             for ($f = 1; $f <= $cantFacturas; $f++) {
-                $phar->addFromString("factura_{$f}.xml", $facturaXml);
-            }
-            $phar->compress(\Phar::GZ);
+                $fechaCustom = ($eventoDb && $eventoDb->fecha_ini)
+                    ? Carbon::parse($eventoDb->fecha_ini)->addSeconds(2 + (int) (($f - 1) * 45 / max($cantFacturas, 1)))
+                    : now('America/La_Paz')->subSeconds(max(0, $cantFacturas - $f));
 
-            $gzBytes = file_get_contents($gzPath);
+                $archivosPaquete["factura_{$f}.xml"] = $this->prepararXmlFacturaHomologacion(
+                    $contexto['codigoPuntoVenta'],
+                    $contexto,
+                    $cufd,
+                    $eventoDb,
+                    false,
+                    null,
+                    $maxNum + $f,
+                    $fechaCustom
+                );
+            }
+            $gzBytes = SiatFacturacionService::generarTarGz($archivosPaquete);
             $hashArchivo = hash('sha256', $gzBytes);
             $fechaEnvioIso = now('America/La_Paz')->format('Y-m-d\TH:i:s.000');
-
-            @unlink($tarPath);
-            @unlink($gzPath);
-            @rmdir($tempDir);
 
             $respRaw = $this->siatController->recepcionPaqueteFactura(
                 $contexto['token'],
@@ -1747,7 +1737,8 @@ class SiatHomologacionService
         ?EventoSignificativo $eventoDb,
         bool $requiereCafc,
         ?string $cafcAplicable,
-        int $numeroFactura = 1
+        int $numeroFactura = 1,
+        ?Carbon $fechaEmisionCustom = null
     ): string {
         $facturaXmlBase = Factura::where('productos_xml', 'like', '%<?xml%')->latest('id')->value('productos_xml')
             ?: '<?xml version="1.0" encoding="UTF-8"?><facturaComputarizadaCompraVenta></facturaComputarizadaCompraVenta>';
@@ -1759,10 +1750,15 @@ class SiatHomologacionService
         $xml = preg_replace('/<numeroFactura>.*?<\/numeroFactura>/', "<numeroFactura>{$numeroFactura}</numeroFactura>", $xml);
 
         // 2. Fecha de Emisión acorde al Evento de Contingencia
-        if ($eventoDb && $eventoDb->fecha_ini) {
+        if ($fechaEmisionCustom) {
+            $fechaEmisionIso = $fechaEmisionCustom->format('Y-m-d\TH:i:s.v');
+            $fechaCadena = $fechaEmisionCustom->format('YmdHisv');
+        } elseif ($eventoDb && $eventoDb->fecha_ini) {
             $fechaEmisionIso = Carbon::parse($eventoDb->fecha_ini)->addSeconds(10)->format('Y-m-d\TH:i:s.000');
+            $fechaCadena = Carbon::parse($fechaEmisionIso)->format('YmdHis').'000';
         } else {
             $fechaEmisionIso = now('America/La_Paz')->format('Y-m-d\TH:i:s.000');
+            $fechaCadena = Carbon::parse($fechaEmisionIso)->format('YmdHis').'000';
         }
         $xml = preg_replace('/<fechaEmision>.*?<\/fechaEmision>/', "<fechaEmision>{$fechaEmisionIso}</fechaEmision>", $xml);
 
@@ -1770,7 +1766,6 @@ class SiatHomologacionService
         $xml = preg_replace('/<cufd>.*?<\/cufd>/', "<cufd>{$cufd->codigo}</cufd>", $xml);
 
         // 4. CUF
-        $fechaCadena = Carbon::parse($fechaEmisionIso)->format('YmdHis').'000';
         $facturacionService = app(SiatFacturacionService::class);
         $cuf = $facturacionService->calcularCuf(
             $contexto['nit'],

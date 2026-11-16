@@ -767,7 +767,7 @@ class Pos extends Component
 
             // Desplegar Ticket y Limpiar Carrito
             $this->facturaEmitidaId = $factura->id;
-            $this->showTicketModal = true;
+            // $this->showTicketModal = true;//mostrar factura en modal
             $this->limpiarCarrito();
 
             $this->dispatch('abrir-ticket-flotante', url: route('ventas.factura.imprimir', $factura->id));

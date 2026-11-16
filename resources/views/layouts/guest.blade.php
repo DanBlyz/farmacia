@@ -6,6 +6,7 @@
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
         <title>{{ config('app.name', 'Farma') }} - Portal Integrado de Farmacia</title>
+        <link rel="shortcut icon" href="{{ asset('img/logo_sinfondo.png') }}" />
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
@@ -82,13 +83,13 @@
                 <!-- Footer Izquierdo -->
                 <div class="relative z-10 flex items-center justify-between text-xs text-slate-400 border-t border-white/10 pt-6">
                     <p>&copy; {{ date('Y') }} Farma ERP. Todos los derechos reservados.</p>
-                    <div class="flex items-center gap-4">
+                    {{-- <div class="flex items-center gap-4">
                         <span class="flex items-center gap-1.5">
                             <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                             Servidor En Línea
                         </span>
                         <span>v{{ app()->version() }}</span>
-                    </div>
+                    </div> --}}
                 </div>
             </div>
 

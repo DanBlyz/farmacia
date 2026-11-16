@@ -163,7 +163,7 @@ test('can process a sale with multiple payment methods, discounts FEFO batch sto
         ->set('montoQr', 20.00) // Paga 20 Bs en QR = Total 50 Bs
         ->call('procesarVenta')
         ->assertHasNoErrors()
-        ->assertSet('showTicketModal', true);
+        ->assertDispatched('abrir-ticket-flotante');
 
     // Verificar que se descontó el stock del lote físico
     expect((float) $lote->fresh()->stock_actual)->toBe(47.0);
@@ -467,7 +467,7 @@ test('auto fefo dispenses across multiple lots according to expiration dates and
         ->assertSet('montoQr', '9.40')
         ->call('procesarVenta')
         ->assertHasNoErrors()
-        ->assertSet('showTicketModal', true);
+        ->assertDispatched('abrir-ticket-flotante');
 
     // Verificar consumos en los lotes
     expect((float) $lote1->fresh()->stock_actual)->toBe(0.0)

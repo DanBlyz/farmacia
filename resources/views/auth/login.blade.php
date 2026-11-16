@@ -90,11 +90,11 @@
         </div>
 
         <!-- Enlace a Registro -->
-        <div class="border-t border-slate-100 dark:border-slate-800 pt-6 mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
+        {{-- <div class="border-t border-slate-100 dark:border-slate-800 pt-6 mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
             ¿Aún no tienes cuenta en el sistema? 
             <a href="{{ route('register') }}" class="font-semibold text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 hover:underline transition duration-150 ms-1">
                 Registrar nuevo usuario &rarr;
             </a>
-        </div>
+        </div> --}}
     </form>
 </x-guest-layout>

@@ -4,7 +4,7 @@
     </x-slot>
 
     <!-- Notificación Flash de Éxito -->
-    @if (session()->has('message'))
+    {{-- @if (session()->has('message'))
         <div x-data="{ show: true }" 
              x-show="show" 
              x-init="setTimeout(() => show = false, 6000)"
@@ -25,10 +25,10 @@
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
         </div>
-    @endif
+    @endif --}}
 
     <!-- Notificación Flash de Error -->
-    @if (session()->has('error'))
+    {{-- @if (session()->has('error'))
         <div x-data="{ show: true }" 
              x-show="show" 
              x-init="setTimeout(() => show = false, 7000)"
@@ -49,7 +49,7 @@
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
         </div>
-    @endif
+    @endif --}}
 
     <!-- KPIs Estadísticos Rápidos -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -831,20 +831,22 @@
                                                 </td>
                                                 <td class="py-2.5 px-3 text-right">
                                                     @permiso('sincronizacion.paquetes.validar')
-                                                    <button type="button" 
-                                                            wire:click="validarPaquete({{ $paq->id }})"
-                                                            wire:loading.attr="disabled"
-                                                            wire:target="validarPaquete({{ $paq->id }})"
-                                                            class="px-2.5 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 font-semibold text-xs transition duration-150 cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50">
-                                                        <span wire:loading.remove wire:target="validarPaquete({{ $paq->id }})" class="flex items-center gap-1.5">
-                                                            <i class="fas fa-rotate text-teal-600 text-[10px]"></i>
-                                                            <span>Validar en SIAT</span>
-                                                        </span>
-                                                        <span wire:loading wire:target="validarPaquete({{ $paq->id }})" class="flex items-center gap-1.5">
-                                                            <i class="fas fa-spinner fa-spin text-teal-600 text-[10px]"></i>
-                                                            <span>Consultando...</span>
-                                                        </span>
-                                                    </button>
+                                                        @if($paq->codigo_estado != 908 || $paq->estado != 'VALIDADA')
+                                                            <button type="button" 
+                                                                    wire:click="validarPaquete({{ $paq->id }})"
+                                                                    wire:loading.attr="disabled"
+                                                                    wire:target="validarPaquete({{ $paq->id }})"
+                                                                    class="px-2.5 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 font-semibold text-xs transition duration-150 cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50">
+                                                                <span wire:loading.remove wire:target="validarPaquete({{ $paq->id }})" class="flex items-center gap-1.5">
+                                                                    <i class="fas fa-rotate text-teal-600 text-[10px]"></i>
+                                                                    <span>Validar en SIAT</span>
+                                                                </span>
+                                                                <span wire:loading wire:target="validarPaquete({{ $paq->id }})" class="flex items-center gap-1.5">
+                                                                    <i class="fas fa-spinner fa-spin text-teal-600 text-[10px]"></i>
+                                                                    <span>Consultando...</span>
+                                                                </span>
+                                                            </button>
+                                                        @endif
                                                     @endpermiso
                                                 </td>
                                             </tr>
@@ -857,7 +859,7 @@
                                                             <span>Facturas incluidas en este paquete ({{ $paq->facturas->count() }}):</span>
                                                         </div>
                                                         <div class="flex flex-wrap items-center gap-2">
-                                                            @foreach($paq->facturas as $facPaq)
+                                                            @foreach($paq->facturas->take(15) as $facPaq)
                                                                 <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono border {{ $facPaq->estado === 'VALIDADA' ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800' }}">
                                                                     <strong>#{{ $facPaq->numero_factura }}</strong>
                                                                     <span class="text-slate-500 dark:text-slate-400 font-sans text-[11px]">Bs. {{ number_format($facPaq->total, 2) }}</span>
@@ -866,6 +868,11 @@
                                                                     </span>
                                                                 </span>
                                                             @endforeach
+                                                            @if($paq->facturas->count() > 15)
+                                                                <span class="inline-flex items-center px-2 py-1 text-xs text-slate-500 dark:text-slate-400 font-medium italic">
+                                                                    +{{ $paq->facturas->count() - 15 }} facturas más en este paquete...
+                                                                </span>
+                                                            @endif
                                                         </div>
                                                     </td>
                                                 </tr>
