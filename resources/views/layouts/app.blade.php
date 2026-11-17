@@ -37,11 +37,19 @@
         @stack('styles')
     </head>
     <body x-data="{ 
-              sidebarOpen: true, 
+              sidebarOpen: localStorage.getItem('sidebarOpen') !== null ? (localStorage.getItem('sidebarOpen') === 'true') : true, 
+              sidebarHovered: false,
               mobileOpen: false, 
-              darkMode: localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)
+              darkMode: localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches),
+              get isExpanded() {
+                  return this.sidebarOpen || this.sidebarHovered || this.mobileOpen;
+              }
           }" 
-          x-init="if (darkMode) { document.documentElement.classList.add('dark') } else { document.documentElement.classList.remove('dark') }"
+          x-init="
+              if (darkMode) { document.documentElement.classList.add('dark') } else { document.documentElement.classList.remove('dark') };
+              $watch('sidebarOpen', val => localStorage.setItem('sidebarOpen', val));
+          "
+          x-on:livewire:navigated.window="sidebarHovered = false"
           class="font-sans antialiased bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen selection:bg-teal-500 selection:text-white">
         
         <div class="min-h-screen flex">

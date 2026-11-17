@@ -284,7 +284,7 @@ class Sucursales extends Component
                 }
             } else {
                 $msg = $data->msg ?? $data->error ?? 'Error de comunicación o credenciales inválidas';
-                $msgFormatted = is_string($msg) ? $msg : json_encode($msg, JSON_UNESCAPED_UNICODE);
+                $msgFormatted = $this->formatSiatError($msg);
                 session()->flash('error', 'Error en petición al SIAT: '.$msgFormatted);
                 $this->dispatch('swal-alert', icon: 'error', title: 'Error SIAT', message: $msgFormatted);
             }
@@ -369,7 +369,7 @@ class Sucursales extends Component
                 }
             } else {
                 $msg = $data->msg ?? $data->mensaje ?? 'Error al comunicarse con SIAT';
-                $msgFormatted = is_string($msg) ? $msg : json_encode($msg, JSON_UNESCAPED_UNICODE);
+                $msgFormatted = $this->formatSiatError($msg);
                 session()->flash('error', 'Error al sincronizar actividades: '.$msgFormatted);
                 $this->dispatch('swal-alert', icon: 'error', title: 'Error SIAT', message: $msgFormatted);
             }
@@ -460,7 +460,7 @@ class Sucursales extends Component
                 }
             } else {
                 $msg = $data->msg ?? $data->mensaje ?? 'Error de respuesta del SIAT';
-                $msgFormatted = is_string($msg) ? $msg : json_encode($msg, JSON_UNESCAPED_UNICODE);
+                $msgFormatted = $this->formatSiatError($msg);
                 session()->flash('error', 'Error al sincronizar productos/servicios: '.$msgFormatted);
                 $this->dispatch('swal-alert', icon: 'error', title: 'Error SIAT', message: $msgFormatted);
             }
@@ -558,7 +558,7 @@ class Sucursales extends Component
                 }
             } else {
                 $msg = $data->msg ?? $data->mensaje ?? 'Error de comunicación al consultar los puntos de venta con SIAT.';
-                $msgFormatted = is_string($msg) ? $msg : json_encode($msg, JSON_UNESCAPED_UNICODE);
+                $msgFormatted = $this->formatSiatError($msg);
                 session()->flash('error', 'Error al consultar puntos de venta: '.$msgFormatted);
                 $this->dispatch('swal-alert', icon: 'error', title: 'Error SIAT', message: $msgFormatted);
             }
@@ -672,7 +672,7 @@ class Sucursales extends Component
                 }
             } else {
                 $msg = $data->msg ?? $data->mensaje ?? 'Error al comunicarse con SIAT para el Cierre de Operaciones de Sistema.';
-                $msgFormatted = is_string($msg) ? $msg : json_encode($msg, JSON_UNESCAPED_UNICODE);
+                $msgFormatted = $this->formatSiatError($msg);
                 session()->flash('error', 'Error en Cierre de Operaciones: '.$msgFormatted);
                 $this->dispatch('swal-alert', icon: 'error', title: 'Error SIAT', message: $msgFormatted);
             }
@@ -805,7 +805,7 @@ class Sucursales extends Component
                 }
             } else {
                 $msg = $data->msg ?? $data->mensaje ?? 'Error de respuesta del servidor SIAT al registrar el punto de venta.';
-                $msgFormatted = is_string($msg) ? $msg : json_encode($msg, JSON_UNESCAPED_UNICODE);
+                $msgFormatted = $this->formatSiatError($msg);
                 session()->flash('error', 'Error en registro de Punto de Venta: '.$msgFormatted);
                 $this->dispatch('swal-alert', icon: 'error', title: 'Error SIAT', message: $msgFormatted);
             }
@@ -814,6 +814,33 @@ class Sucursales extends Component
             session()->flash('error', $msgException);
             $this->dispatch('swal-alert', icon: 'error', title: 'Excepción SIAT', message: $msgException);
         }
+    }
+
+    private function formatSiatError(mixed $msg): string
+    {
+        if (is_null($msg)) {
+            return 'No se obtuvo respuesta del servidor SIAT.';
+        }
+
+        $rawString = is_string($msg) ? $msg : json_encode($msg, JSON_UNESCAPED_UNICODE);
+
+        if (str_contains($rawString, "Couldn't load from") || str_contains($rawString, 'failed to load external entity')) {
+            if (str_contains($rawString, '/sdf/')) {
+                return 'El servidor SOAP de Impuestos Nacionales para la Versión 3 (/sdf/) se encuentra temporalmente fuera de servicio o en mantenimiento (Error HTTP 503: Service Temporarily Unavailable en el SIN). Verifique con soporte del SIN o intente nuevamente más tarde.';
+            }
+
+            return 'No se pudo conectar con el servidor WSDL del SIAT (Impuestos Nacionales no responde o el servicio está fuera de línea).';
+        }
+
+        if (is_object($msg) && isset($msg->faultstring)) {
+            return (string) $msg->faultstring;
+        }
+
+        if (is_object($msg) && isset($msg->message)) {
+            return (string) $msg->message;
+        }
+
+        return is_string($msg) ? $msg : $rawString;
     }
 
     private function extractSiatMensaje($mensajesList): string

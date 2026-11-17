@@ -4,7 +4,7 @@
     </x-slot>
 
     <!-- Notificación Flash -->
-    @if (session()->has('message'))
+    {{-- @if (session()->has('message'))
         <div class="p-4 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-200 flex items-center justify-between text-sm shadow-sm">
             <div class="flex items-center gap-2">
                 <i class="fas fa-check-circle text-teal-500 text-base"></i>
@@ -14,7 +14,7 @@
                 <i class="fas fa-times"></i>
             </button>
         </div>
-    @endif
+    @endif --}}
 
     <!-- 1. Tarjetas KPI Métricas de Ventas -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">

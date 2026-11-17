@@ -12,7 +12,7 @@ class UrlServicioSeeder extends Seeder
      */
     public function run(): void
     {
-        UrlApiServicio::create([
+        /* UrlApiServicio::create([
             'nombre' => 'url_facturacionSincronizacion',
             'url_servicio' => 'https://pilotosiatservicios.impuestos.gob.bo/v2/FacturacionSincronizacion?wsdl',
             'ambiente' => 2,
@@ -35,8 +35,8 @@ class UrlServicioSeeder extends Seeder
             'url_servicio' => 'https://pilotosiatservicios.impuestos.gob.bo/v2/FacturacionOperaciones?wsdl',
             'ambiente' => 2,
             'modalidad' => 2,
-        ]);
-        /* UrlApiServicio::create([
+        ]); */
+        UrlApiServicio::create([
             'nombre' => 'url_facturacionSincronizacion',
             'url_servicio' => 'https://pilotosiatservicios.impuestos.gob.bo/sdf/FacturacionSincronizacion?wsdl',
             'ambiente' => 2,
@@ -59,6 +59,6 @@ class UrlServicioSeeder extends Seeder
             'url_servicio' => 'https://pilotosiatservicios.impuestos.gob.bo/sdf/FacturacionOperaciones?wsdl',
             'ambiente' => 2,
             'modalidad' => 2,
-        ]); */
+        ]);
     }
 }

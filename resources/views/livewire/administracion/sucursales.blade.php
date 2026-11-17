@@ -4,7 +4,7 @@
     </x-slot>
 
     <!-- Mensaje de Notificación Flash -->
-    @if (session()->has('message'))
+    {{-- @if (session()->has('message'))
         <div x-data="{ show: true }" 
              x-show="show" 
              x-init="setTimeout(() => show = false, 4000)"
@@ -48,7 +48,7 @@
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
         </div>
-    @endif
+    @endif --}}
 
     <!-- Tarjeta Principal (Estilo Clásico: contenido con padding y tabla enmarcada) -->
     <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-5 sm:p-6 space-y-5 transition-all duration-200">

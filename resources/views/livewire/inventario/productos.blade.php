@@ -4,7 +4,7 @@
     </x-slot>
 
     <!-- Notificación Flash -->
-    @if (session()->has('message'))
+    {{-- @if (session()->has('message'))
         <div x-data="{ show: true }" 
              x-show="show" 
              x-init="setTimeout(() => show = false, 5000)"
@@ -25,7 +25,7 @@
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
         </div>
-    @endif
+    @endif --}}
 
     <!-- Tarjeta Principal (Estilo Clásico: contenido con padding y tabla enmarcada) -->
     <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-5 sm:p-6 space-y-5 transition-all duration-200">
@@ -428,7 +428,7 @@
                                 </div>
 
                                 <!-- Código de Barras -->
-                                <div class="sm:col-span-6">
+                                {{-- <div class="sm:col-span-6">
                                     <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                                         Código de Barras (EAN / UPC)
                                     </label>
@@ -441,24 +441,23 @@
                                                placeholder="Escanear con pistola..." 
                                                class="w-full pl-9 pr-3 py-2 text-xs font-mono rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-500 outline-none">
                                     </div>
+                                </div> --}}
+                                <!-- Proveedor / Distribuidor -->
+                                <div class="sm:col-span-6">
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                        Proveedor / Laboratorio Distribuidor
+                                    </label>
+                                    <select wire:model="proveedor_id" 
+                                            class="w-full text-xs rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-teal-500 py-2 px-3 outline-none cursor-pointer">
+                                        <option value="">Seleccione el Proveedor o Laboratorio (Opcional)...</option>
+                                        @foreach($proveedores as $prov)
+                                            <option value="{{ $prov->id }}">
+                                                {{ $prov->razon_social ? $prov->razon_social.' ('.$prov->nombre.')' : $prov->nombre }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error('proveedor_id') <span class="text-rose-500 text-[11px] block mt-1">{{ $message }}</span> @enderror
                                 </div>
-                            </div>
-
-                            <!-- Proveedor / Distribuidor -->
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                                    Proveedor / Laboratorio Distribuidor
-                                </label>
-                                <select wire:model="proveedor_id" 
-                                        class="w-full text-xs rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-teal-500 py-2 px-3 outline-none cursor-pointer">
-                                    <option value="">Seleccione el Proveedor o Laboratorio (Opcional)...</option>
-                                    @foreach($proveedores as $prov)
-                                        <option value="{{ $prov->id }}">
-                                            {{ $prov->razon_social ? $prov->razon_social.' ('.$prov->nombre.')' : $prov->nombre }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                @error('proveedor_id') <span class="text-rose-500 text-[11px] block mt-1">{{ $message }}</span> @enderror
                             </div>
 
                             <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
