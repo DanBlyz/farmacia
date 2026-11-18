@@ -2,15 +2,18 @@
 
 use App\Http\Controllers\FacturaImpresionController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ReportePdfController;
 use App\Livewire\Administracion\Clientes;
 use App\Livewire\Administracion\Proveedores;
 use App\Livewire\Administracion\Roles;
 use App\Livewire\Administracion\Sucursales;
 use App\Livewire\Administracion\Usuarios;
 use App\Livewire\Cajas\ControlCajas;
+use App\Livewire\Dashboard;
 use App\Livewire\Inventario\Kardex;
 use App\Livewire\Inventario\Lotes;
 use App\Livewire\Inventario\Productos;
+use App\Livewire\Reportes\ReportesIndex;
 use App\Livewire\Sincronizacion\Catalogos;
 use App\Livewire\Sincronizacion\EventosSignificativos;
 use App\Livewire\Ventas\HistorialVentas;
@@ -21,9 +24,9 @@ Route::get('/', function () {
     return view('auth.login');
 });
 
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', Dashboard::class)
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -60,6 +63,14 @@ Route::middleware('auth')->group(function () {
         Route::get('/factura/{factura}/imprimir', [FacturaImpresionController::class, 'imprimirTicket'])
             ->middleware('permiso:ventas.facturas.imprimir')
             ->name('factura.imprimir');
+    });
+
+    Route::prefix('reportes')->as('reportes.')->group(function () {
+        Route::get('/', ReportesIndex::class)->name('index');
+        Route::get('/inventario/pdf', [ReportePdfController::class, 'inventarioPdf'])->name('inventario.pdf');
+        Route::get('/utilidades/pdf', [ReportePdfController::class, 'utilidadesPdf'])->name('utilidades.pdf');
+        Route::get('/cajas/pdf', [ReportePdfController::class, 'cajasPdf'])->name('cajas.pdf');
+        Route::get('/clientes/pdf', [ReportePdfController::class, 'clientesPdf'])->name('clientes.pdf');
     });
 });
 

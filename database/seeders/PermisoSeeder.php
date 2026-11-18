@@ -285,6 +285,32 @@ class PermisoSeeder extends Seeder
                 'nombre' => 'sincronizacion.paquetes.validar',
                 'descripcion' => 'Validar paquetes de contingencia transmitidos ante el SIAT',
             ],
+            // ==========================================
+            // 7. MÓDULO DASHBOARD Y MÉTRICAS
+            // ==========================================
+            [
+                'nombre' => 'dashboard.general.ver',
+                'descripcion' => 'Ver panel de control general, métricas e indicadores de negocio',
+            ],
+            // ==========================================
+            // 8. MÓDULO REPORTES Y AUDITORÍA
+            // ==========================================
+            [
+                'nombre' => 'reportes.inventario.ver',
+                'descripcion' => 'Consultar y exportar reportes de inventario, movimientos y saldos',
+            ],
+            [
+                'nombre' => 'reportes.utilidades.ver',
+                'descripcion' => 'Consultar y exportar reportes de utilidades y ganancias de facturas',
+            ],
+            [
+                'nombre' => 'reportes.cajas.ver',
+                'descripcion' => 'Consultar y exportar reportes de control de cajas y turnos por usuario',
+            ],
+            [
+                'nombre' => 'reportes.clientes.ver',
+                'descripcion' => 'Consultar y exportar reportes de clientes frecuentes y compras',
+            ],
         ];
 
         foreach ($permisos as $p) {

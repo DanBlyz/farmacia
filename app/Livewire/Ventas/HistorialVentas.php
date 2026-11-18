@@ -227,7 +227,7 @@ class HistorialVentas extends Component
             $this->dispatch('swal-alert', icon: 'success', title: 'Factura Anulada', message: $msg);
         } catch (Exception $e) {
             DB::rollBack();
-            Log::error('Error al anular factura: ' . $e->getMessage());
+            Log::error('Error al anular factura: '.$e->getMessage());
             $this->dispatch('swal-alert', icon: 'error', title: 'Error en Anulación', message: $e->getMessage());
         }
     }
@@ -367,7 +367,7 @@ class HistorialVentas extends Component
             $this->dispatch('swal-alert', icon: 'success', title: '¡Anulación Revertida!', message: $msg);
         } catch (Exception $e) {
             DB::rollBack();
-            Log::error('Error al revertir anulación de factura: ' . $e->getMessage());
+            Log::error('Error al revertir anulación de factura: '.$e->getMessage());
             $this->dispatch('swal-alert', icon: 'error', title: 'Error en Reversión', message: $e->getMessage());
         }
     }
@@ -392,7 +392,7 @@ class HistorialVentas extends Component
         if ($diferenciaSegundos > 240) {
             $fechaActual = now();
             $factura->fecha = $fechaActual;
-            $fechaCadena = $fechaActual->format('YmdHis') . '000';
+            $fechaCadena = $fechaActual->format('YmdHis').'000';
             $factura->cuf = $siatService->calcularCuf(
                 config('siat.nit'),
                 $fechaCadena,
@@ -438,11 +438,11 @@ class HistorialVentas extends Component
                         ->orWhere('cuf', 'like', "%{$this->search}%");
                 });
             })
-            ->when($this->filtroSucursalId, fn($q) => $q->where('sucursal_id', $this->filtroSucursalId))
-            ->when($this->filtroEstado, fn($q) => $q->where('estado', $this->filtroEstado))
-            ->when($this->fechaInicio, fn($q) => $q->whereDate('fecha', '>=', $this->fechaInicio))
-            ->when($this->fechaFin, fn($q) => $q->whereDate('fecha', '<=', $this->fechaFin))
-            ->where('punto_venta_id', 2)
+            ->when($this->filtroSucursalId, fn ($q) => $q->where('sucursal_id', $this->filtroSucursalId))
+            ->when($this->filtroEstado, fn ($q) => $q->where('estado', $this->filtroEstado))
+            ->when($this->fechaInicio, fn ($q) => $q->whereDate('fecha', '>=', $this->fechaInicio))
+            ->when($this->fechaFin, fn ($q) => $q->whereDate('fecha', '<=', $this->fechaFin))
+            // ->where('punto_venta_id', 2)
             ->orderBy('id', 'desc');
 
         $facturas = $query->paginate($this->perPage);

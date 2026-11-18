@@ -234,20 +234,24 @@
         @endanypermiso
 
         <!-- SECCIÓN: REPORTES -->
+        @anypermiso(['reportes.inventario.ver', 'reportes.utilidades.ver', 'reportes.cajas.ver', 'reportes.clientes.ver'])
         <div class="space-y-1">
             <p :class="{'hidden': !isExpanded, 'block': isExpanded}" 
                class="px-3 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
                 Inteligencia
             </p>
             
-            <a href="#" 
+            <a href="{{ route('reportes.index') }}" 
                :class="{'px-3': isExpanded, 'justify-center px-0': !isExpanded}"
-               class="flex items-center gap-3 py-2.5 rounded-xl font-medium text-sm text-slate-300 hover:bg-slate-800/80 hover:text-white transition-all duration-150"
-               title="Reportes">
-                <svg class="w-5 h-5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-                <span :class="{'hidden': !isExpanded, 'block': isExpanded}" class="truncate">Reportes & Kardex PDF</span>
+               class="flex items-center gap-3 py-2.5 rounded-xl font-medium text-sm transition-all duration-150 {{ request()->routeIs('reportes.*') ? 'bg-teal-600 text-white shadow-md font-semibold' : 'text-slate-300 hover:bg-slate-800/80 hover:text-white' }}"
+               title="Reportes Generales">
+                <svg class="w-5 h-5 shrink-0 {{ request()->routeIs('reportes.*') ? 'text-white' : 'text-amber-400' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <span :class="{'hidden': !isExpanded, 'block': isExpanded}" class="truncate">Reportes Generales</span>
             </a>
         </div>
+        @endanypermiso
 
     </div>
 
